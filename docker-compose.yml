@@ -1,0 +1,52 @@
+# EasyWords Docker Compose 配置
+# 适用于 NAS / 自建服务器部署
+
+version: '3.8'
+
+services:
+  # ============================================
+  # EasyWords 应用
+  # ============================================
+  easywords:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: easywords
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      # Turso 数据库配置（请替换为你的实际值）
+      - DATABASE_URL=libsql://easywords-ckk521.aws-ap-northeast-1.turso.io
+      - TURSO_AUTH_TOKEN=${TURSO_AUTH_TOKEN}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+    networks:
+      - easywords-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/settings"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # ============================================
+  # Cloudflare Tunnel（内网穿透）
+  # 使用方法：
+  # 1. 在 Cloudflare Zero Trust 创建 Tunnel
+  # 2. 获取 Token
+  # 3. 在 .env 文件中设置 CLOUDFLARE_TUNNEL_TOKEN
+  # ============================================
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: cloudflared
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
+    networks:
+      - easywords-network
+    depends_on:
+      - easywords
+
+networks:
+  easywords-network:
+    driver: bridge

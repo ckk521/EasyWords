@@ -24,9 +24,15 @@ export async function GET(request: NextRequest) {
         }
       : {}
 
-    const orderBy = query.sortBy
-      ? { [query.sortBy]: query.order || 'desc' }
-      : { createdAt: 'desc' }
+    // 构建排序条件
+    type SortOrder = 'asc' | 'desc'
+    const orderDirection: SortOrder = (query.order || 'desc') as SortOrder
+    let orderBy: { createdAt?: SortOrder; lastReviewedAt?: SortOrder }
+    if (query.sortBy === 'lastReviewedAt') {
+      orderBy = { lastReviewedAt: orderDirection }
+    } else {
+      orderBy = { createdAt: orderDirection }
+    }
 
     const words = await prisma.word.findMany({
       where,

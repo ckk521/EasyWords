@@ -5,18 +5,23 @@ import react from '@vitejs/plugin-react'
 
 export default defineConfig({
   plugins: [
-    // The React and Tailwind plugins are both required for Make, even if
-    // Tailwind is not being actively used – do not remove them
     react(),
     tailwindcss(),
   ],
   resolve: {
     alias: {
-      // Alias @ to the src directory
       '@': path.resolve(__dirname, './src'),
     },
   },
-
-  // File types to support raw imports. Never add .css, .tsx, or .ts files to this.
+  // 生产环境输出到 Next.js public 目录
+  build: {
+    outDir: path.resolve(__dirname, '../server/public'),
+    emptyOutDir: true,
+    sourcemap: false,
+  },
+  // 开发环境基础路径
+  base: '/',
+  // 生产环境资源路径 (同域部署，不需要额外路径)
+  // assets 路径在 build 时自动处理
   assetsInclude: ['**/*.svg', '**/*.csv'],
 })

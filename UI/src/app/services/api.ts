@@ -2,9 +2,10 @@
 import { Word, CreateWordRequest, WordListQuery, DictionaryData } from '../types/word';
 import { Article, GenerateArticleRequest } from '../types/article';
 
-// 后端 API 基础地址 (Next.js 默认 3000，如果被占用会自动切换)
-// 注意：启动时检查后端实际端口
-const API_BASE = 'http://localhost:3000/api';
+// API 基础地址配置
+// - 开发环境: 从环境变量读取，默认 http://localhost:3000/api
+// - 生产环境: 使用相对路径 /api (前后端同域部署)
+const API_BASE = import.meta.env.VITE_API_BASE || '/api';
 
 // 统一响应格式
 interface ApiResponse<T> {

@@ -5,11 +5,13 @@ node_modules/
 .next/
 dist/
 build/
+server/public/
 
 # Environment variables
 .env
 .env.local
 .env.*.local
+UI/.env
 
 # Database
 *.db
@@ -32,3 +34,6 @@ npm-debug.log*
 
 # Claude
 .claude/
+
+# Vercel
+.vercel/

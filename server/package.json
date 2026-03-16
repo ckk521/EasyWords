@@ -4,17 +4,21 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "pnpm build:frontend && next build",
+    "build:frontend": "cd ../UI && pnpm install && pnpm build",
     "start": "next start",
     "lint": "next lint",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:push": "prisma db push",
-    "db:studio": "prisma studio"
+    "db:studio": "prisma studio",
+    "postinstall": "prisma generate"
   },
   "dependencies": {
     "@ai-sdk/openai": "^3.0.41",
-    "@prisma/client": "^5.0.0",
+    "@libsql/client": "^0.8.0",
+    "@prisma/adapter-libsql": "^5.22.0",
+    "@prisma/client": "^5.22.0",
     "ai": "^3.0.0",
     "edge-tts": "^1.0.1",
     "next": "^14.2.0",
@@ -30,7 +34,7 @@
     "@types/uuid": "^9.0.0",
     "eslint": "^8.0.0",
     "eslint-config-next": "^14.2.0",
-    "prisma": "^5.0.0",
+    "prisma": "^5.22.0",
     "typescript": "^5.0.0"
   }
 }

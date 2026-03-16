@@ -34,6 +34,7 @@ export function Reading() {
   const [popupPosition, setPopupPosition] = useState({ x: 0, y: 0 });
   const popupRef = useRef<HTMLDivElement>(null);
   const wordCache = useRef<Record<string, DictResult>>({});
+  const longPressTimer = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     if (articleId) {
@@ -167,6 +168,97 @@ export function Reading() {
     }
   };
 
+  // 长按查词（移动端）
+  const handleTouchStart = (e: React.TouchEvent) => {
+    const touch = e.touches[0];
+
+    longPressTimer.current = setTimeout(async () => {
+      // 获取触摸位置的元素
+      const element = document.elementFromPoint(touch.clientX, touch.clientY) as HTMLElement;
+      if (!element) return;
+
+      // 尝试获取精确的单词位置
+      let word = '';
+
+      // 方法1: 使用 caretRangeFromPoint (Chrome/Safari) 或 caretPositionFromPoint (Firefox)
+      if (document.caretRangeFromPoint) {
+        const range = document.caretRangeFromPoint(touch.clientX, touch.clientY);
+        if (range) {
+          const textNode = range.startContainer;
+          if (textNode.nodeType === Node.TEXT_NODE) {
+            const text = textNode.textContent || '';
+            const offset = range.startOffset;
+
+            let start = offset;
+            while (start > 0 && /[a-zA-Z]/.test(text[start - 1])) start--;
+            let end = offset;
+            while (end < text.length && /[a-zA-Z]/.test(text[end])) end++;
+
+            if (end > start) word = text.substring(start, end).toLowerCase();
+          }
+        }
+      } else if ((document as any).caretPositionFromPoint) {
+        // Firefox
+        const pos = (document as any).caretPositionFromPoint(touch.clientX, touch.clientY);
+        if (pos && pos.offsetNode && pos.offsetNode.nodeType === Node.TEXT_NODE) {
+          const text = pos.offsetNode.textContent || '';
+          const offset = pos.offset;
+
+          let start = offset;
+          while (start > 0 && /[a-zA-Z]/.test(text[start - 1])) start--;
+          let end = offset;
+          while (end < text.length && /[a-zA-Z]/.test(text[end])) end++;
+
+          if (end > start) word = text.substring(start, end).toLowerCase();
+        }
+      }
+
+      // 方法2: 从选中的文本获取
+      if (!word || word.length < 2) {
+        const selection = window.getSelection();
+        if (selection && selection.toString().trim()) {
+          const selectedText = selection.toString().trim().toLowerCase();
+          if (/^[a-zA-Z\-']+$/.test(selectedText)) {
+            word = selectedText;
+          }
+        }
+      }
+
+      if (!word || word.length < 2) return;
+
+      setPopupPosition({ x: touch.clientX, y: touch.clientY + 10 });
+
+      // 检查缓存
+      if (wordCache.current[word]) {
+        setPopupWord({ ...wordCache.current[word] });
+        return;
+      }
+
+      // 显示加载状态
+      setPopupWord({ word, loading: true });
+
+      try {
+        const result = await api.quickLookup(word);
+        const dictResult: DictResult = {
+          word,
+          phonetic: result.phoneticUs,
+          definition: result.chineseDefinition,
+        };
+        wordCache.current[word] = dictResult;
+        setPopupWord({ ...dictResult });
+      } catch (error) {
+        setPopupWord({ word, definition: '查询失败' });
+      }
+    }, 800); // 800ms 长按触发
+  };
+
+  const handleTouchEnd = () => {
+    if (longPressTimer.current) {
+      clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
+    }
+  };
+
   // 将文章按段落分割
   const splitParagraphs = (content: string): string[] => {
     // 按换行符分割，过滤空段落
@@ -268,6 +360,9 @@ export function Reading() {
         <div
           className="prose prose-lg max-w-none space-y-6 select-text cursor-text"
           onDoubleClick={handleDoubleClick}
+          onTouchStart={handleTouchStart}
+          onTouchEnd={handleTouchEnd}
+          onTouchMove={handleTouchEnd}
         >
           {paragraphs.map((paragraph, index) => (
             <div key={index} className="group">
@@ -317,15 +412,14 @@ export function Reading() {
         </div>
       </div>
 
-      {/* 双击查词弹窗 */}
+      {/* 双击/长按查词弹窗 */}
       {popupWord && (
         <div
           ref={popupRef}
           className="fixed z-50 bg-white border border-gray-200 rounded-lg shadow-xl p-4 min-w-[200px] max-w-[300px]"
           style={{
-            left: popupPosition.x,
-            top: popupPosition.y,
-            transform: 'translateX(-50%)',
+            left: Math.min(Math.max(popupPosition.x - 100, 10), window.innerWidth - 320),
+            top: Math.min(popupPosition.y, window.innerHeight - 180),
           }}
         >
           <div className="flex items-start justify-between mb-2">
@@ -361,7 +455,7 @@ export function Reading() {
           )}
 
           <p className="text-xs text-gray-400 mt-2 pt-2 border-t">
-            双击其他单词继续查询
+            双击/长按其他单词继续查询
           </p>
         </div>
       )}

@@ -5,6 +5,35 @@ import { successResponse, errorResponse, ErrorCodes, getApiConfig } from '@/lib/
 import { GenerateArticleSchema } from '@/lib/schemas'
 import { generateArticle, generateArticleStream } from '@/lib/llm'
 
+/**
+ * 清理文章中的高亮标记，只保留真正的生词
+ * @param content 文章内容
+ * @param validWords 有效的生词列表（小写）
+ */
+function cleanHighlights(content: string, validWords: string[]): string {
+  // 将有效单词转为小写 Set，便于匹配
+  const validSet = new Set(validWords.map(w => w.toLowerCase()))
+
+  // 匹配所有 **word** 格式的标记
+  return content.replace(/\*\*([^*]+)\*\*/g, (match, word) => {
+    const lowerWord = word.toLowerCase().trim()
+    // 如果是有效生词，保留标记；否则移除标记
+    if (validSet.has(lowerWord)) {
+      return match
+    }
+    // 检查是否是有效生词的变形（如 wielded -> wield）
+    for (const validWord of validSet) {
+      if (lowerWord.startsWith(validWord) || validWord.startsWith(lowerWord)) {
+        // 可能是变形词，保留
+        return match
+      }
+    }
+    // 不是有效生词，移除 ** 标记
+    console.log(`[清理高亮] 移除非生词标记: ${word}`)
+    return word
+  })
+}
+
 // 获取文章列表（支持分页）
 export async function GET(request: NextRequest) {
   try {
@@ -134,11 +163,14 @@ export async function POST(request: NextRequest) {
               }
             }
 
+            // 清理错误的高亮标记，只保留真正的生词
+            const cleanedContent = cleanHighlights(fullContent, wordTexts)
+
             // 保存文章
             const article = await prisma.article.create({
               data: {
                 title: articleTitle,
-                content: fullContent,
+                content: cleanedContent,
                 wordIds: JSON.stringify(wordIds),
                 type,
                 length,
@@ -178,11 +210,14 @@ export async function POST(request: NextRequest) {
     const wordTexts = words.map((w) => w.word)
     const { title, content } = await generateArticle(wordTexts, type, length, apiConfig, topic)
 
+    // 清理错误的高亮标记，只保留真正的生词
+    const cleanedContent = cleanHighlights(content, wordTexts)
+
     // 保存文章
     const article = await prisma.article.create({
       data: {
         title,
-        content,
+        content: cleanedContent,
         wordIds: JSON.stringify(wordIds),
         type,
         length,

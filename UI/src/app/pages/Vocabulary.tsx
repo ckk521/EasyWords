@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Badge } from '../components/ui/badge';
 import { api } from '../services/api';
 import { Word } from '../types/word';
-import { Search, Sparkles, Loader2, Trash2, Eye } from 'lucide-react';
+import { Search, Sparkles, Loader2, Trash2, Eye, Headphones } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   Dialog,
@@ -30,6 +30,9 @@ export function Vocabulary() {
   const [showPreview, setShowPreview] = useState(false);
   const [streamingContent, setStreamingContent] = useState('');
   const [viewWord, setViewWord] = useState<Word | null>(null);
+  const [generatingAudio, setGeneratingAudio] = useState(false);
+  const [dialogueTopic, setDialogueTopic] = useState('');
+  const [dialogueAccent, setDialogueAccent] = useState('en-US');
   const contentRef = useRef('');
 
   useEffect(() => {
@@ -65,9 +68,9 @@ export function Vocabulary() {
     setSelectedIds(newSelected);
   };
 
-  const handleRecommend = async () => {
+  const handleRecommend = async (count: number) => {
     try {
-      const recommended = await api.recommendWords(10);
+      const recommended = await api.recommendWords(count);
       const recommendedIds = new Set(recommended.map(w => w.id));
       setSelectedIds(recommendedIds);
       toast.success(`已推荐 ${recommended.length} 个单词`);
@@ -124,6 +127,21 @@ export function Vocabulary() {
       setGenerating(false);
       setShowPreview(false);
     }
+  };
+
+  const handleGenerateAudio = async () => {
+    if (selectedIds.size === 0) {
+      toast.error('请至少选择一个单词');
+      return;
+    }
+    if (selectedIds.size > 3) {
+      toast.error('生成对话音频最多选择 3 个单词');
+      return;
+    }
+
+    // 跳转到对话音频页面
+    const topicParam = dialogueTopic.trim() ? `&topic=${encodeURIComponent(dialogueTopic.trim())}` : '';
+    navigate(`/dialogue?wordIds=${Array.from(selectedIds).join(',')}${topicParam}&accent=${dialogueAccent}`);
   };
 
   const handleDelete = async (id: string, e: React.MouseEvent) => {
@@ -198,10 +216,6 @@ export function Vocabulary() {
               className="pl-10"
             />
           </div>
-          <Button onClick={handleRecommend} variant="outline">
-            <Sparkles className="size-4 mr-2" />
-            推荐 10 词
-          </Button>
         </div>
       </div>
 
@@ -274,12 +288,19 @@ export function Vocabulary() {
       {/* 生成控制栏 */}
       {words.length > 0 && (
         <div className="sticky bottom-0 bg-white border-t shadow-lg p-4 rounded-t-lg">
-          <div className="flex items-center gap-4">
-            <div className="flex-1">
-              <p className="text-sm text-gray-600 mb-2">
-                已选 <span className="font-semibold text-blue-600">{selectedIds.size}</span> 词
-              </p>
-              <div className="flex gap-3 items-end">
+          {/* 已选词数 */}
+          <p className="text-sm text-gray-600 mb-3">
+            已选 <span className="font-semibold text-blue-600">{selectedIds.size}</span> 词
+          </p>
+
+          {/* 两个生成入口 */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {/* 生成文章 */}
+            <div className="border rounded-lg p-4 bg-gray-50">
+              <h3 className="font-medium mb-3 flex items-center gap-2">
+                ✨ 生成文章
+              </h3>
+              <div className="flex gap-3 items-end mb-3">
                 <div className="flex-1">
                   <label className="text-xs text-gray-600 mb-1 block">主题（可选）</label>
                   <Input
@@ -292,7 +313,7 @@ export function Vocabulary() {
                 <div>
                   <label className="text-xs text-gray-600 mb-1 block">类型</label>
                   <Select value={articleType} onValueChange={(v: any) => setArticleType(v)}>
-                    <SelectTrigger className="w-[120px] h-9">
+                    <SelectTrigger className="w-[100px] h-9">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -304,7 +325,7 @@ export function Vocabulary() {
                 <div>
                   <label className="text-xs text-gray-600 mb-1 block">长度</label>
                   <Select value={articleLength} onValueChange={(v: any) => setArticleLength(v)}>
-                    <SelectTrigger className="w-[120px] h-9">
+                    <SelectTrigger className="w-[110px] h-9">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -315,23 +336,100 @@ export function Vocabulary() {
                   </Select>
                 </div>
               </div>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  className="flex-1"
+                  onClick={() => handleRecommend(10)}
+                >
+                  <Sparkles className="size-4 mr-2" />
+                  推荐 10 词
+                </Button>
+                <Button
+                  className="flex-1"
+                  onClick={handleGenerate}
+                  disabled={selectedIds.size === 0 || generating}
+                >
+                  {generating ? (
+                    <>
+                      <Loader2 className="size-4 animate-spin mr-2" />
+                      生成中...
+                    </>
+                  ) : (
+                    '生成文章'
+                  )}
+                </Button>
+              </div>
             </div>
-            <Button
-              size="lg"
-              onClick={handleGenerate}
-              disabled={selectedIds.size === 0 || generating}
-            >
-              {generating ? (
-                <>
-                  <Loader2 className="size-4 animate-spin mr-2" />
-                  生成中...
-                </>
-              ) : (
-                <>
-                  ✨ 生成内容
-                </>
+
+            {/* 生成对话音频 */}
+            <div className="border rounded-lg p-4 bg-blue-50 border-blue-200">
+              <h3 className="font-medium mb-3 flex items-center gap-2">
+                <Headphones className="size-5 text-blue-600" />
+                生成对话音频
+                <span className="text-xs text-gray-500 font-normal">（最多 3 词）</span>
+              </h3>
+              <p className="text-sm text-gray-600 mb-3">
+                选择 1-3 个单词，AI 生成一段对话，通过听力加深记忆
+              </p>
+              <div className="mb-3">
+                <label className="text-xs text-gray-600 mb-1 block">主题（可选，最多10字）</label>
+                <Input
+                  placeholder="如：职场面试、旅行计划..."
+                  value={dialogueTopic}
+                  onChange={(e) => setDialogueTopic(e.target.value.slice(0, 10))}
+                  className="h-9"
+                  maxLength={10}
+                />
+                <p className="text-xs text-gray-400 mt-1 text-right">{dialogueTopic.length}/10</p>
+              </div>
+              <div className="mb-3">
+                <label className="text-xs text-gray-600 mb-1 block">口音</label>
+                <Select value={dialogueAccent} onValueChange={setDialogueAccent}>
+                  <SelectTrigger className="w-full h-9">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="en-US">🇺🇸 美式英语</SelectItem>
+                    <SelectItem value="en-GB">🇬🇧 英式英语</SelectItem>
+                    <SelectItem value="en-IN">🇮🇳 印度英语</SelectItem>
+                    <SelectItem value="en-AU">🇦🇺 澳洲英语</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  className="flex-1"
+                  onClick={() => handleRecommend(3)}
+                >
+                  <Sparkles className="size-4 mr-2" />
+                  推荐 3 词
+                </Button>
+                <Button
+                  className="flex-1 bg-blue-600 hover:bg-blue-700"
+                  onClick={handleGenerateAudio}
+                  disabled={selectedIds.size === 0 || selectedIds.size > 3 || generatingAudio}
+                >
+                  {generatingAudio ? (
+                    <>
+                      <Loader2 className="size-4 animate-spin mr-2" />
+                      生成中...
+                    </>
+                  ) : (
+                    <>
+                      <Headphones className="size-4 mr-2" />
+                      生成对话音频
+                    </>
+                  )}
+                </Button>
+              </div>
+              {selectedIds.size > 3 && (
+                <p className="text-xs text-red-500 mt-2 text-center">
+                  当前已选 {selectedIds.size} 词，超出限制
+                </p>
               )}
-            </Button>
+            </div>
           </div>
         </div>
       )}

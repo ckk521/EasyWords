@@ -55,3 +55,16 @@ model Settings {
 
   @@map("settings")
 }
+
+// 对话表
+model Dialogue {
+  id        String   @id @default(uuid())
+  scene     String              // 场景描述
+  topic     String?             // 用户自定义主题（最多10字）
+  content   String              // JSON 存储对话内容 [{speaker, text}]
+  wordIds   String              // JSON 存储单词ID数组
+  words     String              // JSON 存储单词列表
+  createdAt DateTime @default(now())
+
+  @@map("dialogues")
+}

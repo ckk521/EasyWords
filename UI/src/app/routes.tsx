@@ -4,6 +4,8 @@ import { Vocabulary } from './pages/Vocabulary';
 import { Reading } from './pages/Reading';
 import { Settings } from './pages/Settings';
 import { Articles } from './pages/Articles';
+import { Dialogue } from './pages/Dialogue';
+import { Dialogues } from './pages/Dialogues';
 import { Header } from './components/layout/Header';
 import { Toaster } from './components/ui/sonner';
 import { WelcomeDialog } from './components/WelcomeDialog';
@@ -58,6 +60,22 @@ export const router = createBrowserRouter([
     element: (
       <Layout>
         <Reading />
+      </Layout>
+    ),
+  },
+  {
+    path: '/dialogue',
+    element: (
+      <Layout>
+        <Dialogue />
+      </Layout>
+    ),
+  },
+  {
+    path: '/dialogues',
+    element: (
+      <Layout>
+        <Dialogues />
       </Layout>
     ),
   },

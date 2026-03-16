@@ -50,7 +50,16 @@ async function request<T>(
     },
   });
 
-  const result: ApiResponse<T> = await response.json();
+  // 先获取响应文本，再尝试解析 JSON
+  const responseText = await response.text();
+
+  let result: ApiResponse<T>;
+  try {
+    result = JSON.parse(responseText);
+  } catch (e) {
+    console.error('JSON 解析失败，响应内容:', responseText.substring(0, 500));
+    throw new Error('服务器响应格式错误');
+  }
 
   if (!result.success) {
     throw new Error(result.message || result.error || '请求失败');
@@ -63,6 +72,14 @@ export const api = {
   // 查词（调用LLM）
   async lookupWord(word: string): Promise<Word> {
     return request<Word>('/words/lookup', {
+      method: 'POST',
+      body: JSON.stringify({ word }),
+    });
+  },
+
+  // 快速查词（仅返回基本释义，用于长按查词）
+  async quickLookup(word: string): Promise<{ chineseDefinition: string; phoneticUs: string }> {
+    return request<{ chineseDefinition: string; phoneticUs: string }>('/words/quick-lookup', {
       method: 'POST',
       body: JSON.stringify({ word }),
     });
@@ -340,5 +357,74 @@ export const api = {
     } catch {
       return false;
     }
+  },
+
+  // 对话音频生成
+  async generateDialogue(params: {
+    words: string[];
+    wordIds: string[];
+    topic?: string;
+  }): Promise<{
+    id: string;
+    wordIds: string[];
+    words: string[];
+    scene: string;
+    topic?: string;
+    dialogue: Array<{
+      speaker: string;
+      text: string;
+    }>;
+    duration: number;
+    createdAt: string;
+  }> {
+    return request('/dialogue', {
+      method: 'POST',
+      body: JSON.stringify(params),
+    });
+  },
+
+  // 获取对话列表
+  async getDialogues(page: number = 1, pageSize: number = 10): Promise<{
+    dialogues: Array<{
+      id: string;
+      scene: string;
+      topic?: string;
+      words: string[];
+      wordIds: string[];
+      dialogue: Array<{
+        speaker: string;
+        text: string;
+      }>;
+      createdAt: string;
+    }>;
+    pagination: {
+      page: number;
+      pageSize: number;
+      total: number;
+      totalPages: number;
+    };
+  }> {
+    return request(`/dialogue?page=${page}&pageSize=${pageSize}`);
+  },
+
+  // 获取单个对话
+  async getDialogue(id: string): Promise<{
+    id: string;
+    scene: string;
+    topic?: string;
+    words: string[];
+    wordIds: string[];
+    dialogue: Array<{
+      speaker: string;
+      text: string;
+    }>;
+    createdAt: string;
+  }> {
+    return request(`/dialogue/${id}`);
+  },
+
+  // 删除对话
+  async deleteDialogue(id: string): Promise<void> {
+    await request(`/dialogue/${id}`, { method: 'DELETE' });
   },
 };

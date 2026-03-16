@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'react-router';
-import { BookOpen, Library, FileText, Settings, Newspaper } from 'lucide-react';
+import { BookOpen, Library, FileText, Settings, Newspaper, Headphones } from 'lucide-react';
 
 export function Header() {
   const location = useLocation();
@@ -7,13 +7,17 @@ export function Header() {
   const navItems = [
     { path: '/', label: '查词', icon: BookOpen },
     { path: '/vocabulary', label: '生词本', icon: Library },
-    { path: '/articles', label: '我的文章', icon: Newspaper },
+    { path: '/articles', label: '生词阅读', icon: Newspaper },
+    { path: '/dialogues', label: '生词会话', icon: Headphones },
     { path: '/settings', label: '设置', icon: Settings }
   ];
 
   const isActive = (path: string) => {
     if (path === '/articles') {
       return location.pathname === '/articles' || location.pathname === '/reading';
+    }
+    if (path === '/dialogues') {
+      return location.pathname === '/dialogues' || location.pathname === '/dialogue';
     }
     return location.pathname === path;
   };

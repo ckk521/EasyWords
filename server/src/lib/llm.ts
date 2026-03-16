@@ -449,9 +449,9 @@ export async function generateArticle(
 2. 自然地融入所有给定单词，不要生硬堆砌
 3. 内容连贯、有逻辑，适合中级英语学习者阅读
 4. 难度适中，句式不要过于复杂
-5. **重要**：每个给定的单词在文章中出现时，用双星号包裹，如 **word** 格式
+5. **非常重要**：只有「给定单词列表」中的单词才需要用双星号包裹（如 **word**），其他任何单词都不要加星号！
 
-单词列表：${words.join(', ')}
+给定单词列表（只有这些词需要加 ** 标记）：${words.join(', ')}
 
 请先输出一个简短的英文标题（一行），然后空一行，再输出文章内容。格式如下：
 Title: [英文标题]
@@ -521,9 +521,9 @@ export async function* generateArticleStream(
 2. 自然地融入所有给定单词，不要生硬堆砌
 3. 内容连贯、有逻辑，适合中级英语学习者阅读
 4. 难度适中，句式不要过于复杂
-5. **重要**：每个给定的单词在文章中出现时，用双星号包裹，如 **word** 格式
+5. **非常重要**：只有「给定单词列表」中的单词才需要用双星号包裹（如 **word**），其他任何单词都不要加星号！
 
-单词列表：${words.join(', ')}
+给定单词列表（只有这些词需要加 ** 标记）：${words.join(', ')}
 
 请先输出一个简短的英文标题（一行），然后空一行，再输出文章内容。格式如下：
 Title: [英文标题]
@@ -789,4 +789,72 @@ ${paragraph}`
 
   const text = await callChatAPI(config, [{ role: 'user', content: prompt }])
   return text.trim()
+}
+
+/**
+ * 对话行 Schema
+ */
+const DialogueLineSchema = z.object({
+  speaker: z.enum(['A', 'B']).describe('说话人'),
+  text: z.string().describe('对话内容'),
+})
+
+/**
+ * 对话结果 Schema
+ */
+const DialogueResultSchema = z.object({
+  scene: z.string().describe('场景描述'),
+  dialogue: z.array(DialogueLineSchema).min(4).max(8).describe('对话内容，4-8轮'),
+})
+
+export type DialogueLine = z.infer<typeof DialogueLineSchema>
+export type DialogueResult = z.infer<typeof DialogueResultSchema>
+
+/**
+ * 生成对话内容
+ */
+export async function generateDialogue(
+  words: string[],
+  config: LLMConfig,
+  topic?: string
+): Promise<DialogueResult> {
+  const topicInstruction = topic
+    ? `\n6. 对话主题必须围绕「${topic}」展开`
+    : ''
+
+  const prompt = `你是一位英语教育内容创作者。请根据以下单词，创作一段有深度的对话。
+
+要求：
+1. 两人对话形式（A 和 B），共 4-6 轮对话
+2. 对话场景贴近日常生活或工作，有起承转合
+3. 语言地道自然，适合中级学习者
+4. 每个单词至少出现一次，用 **单词** 格式标记
+5. 对话要有一定深度，不要过于简单${topicInstruction}
+
+单词列表：${words.join(', ')}
+
+【重要】返回 JSON 格式，不要其他内容：
+{"scene":"场景描述","dialogue":[{"speaker":"A","text":"对话内容"},{"speaker":"B","text":"对话内容"}]}
+
+注意：dialogue 数组必须有 4-6 个元素！`
+
+  const text = await callChatAPI(config, [{ role: 'user', content: prompt }])
+
+  console.log('[generateDialogue] LLM 返回:', text.substring(0, 500))
+
+  // 使用 safeParseJSON 解析，处理格式问题
+  try {
+    const parsed = safeParseJSON(text)
+    console.log('[generateDialogue] 解析成功, dialogue:', parsed.dialogue?.length)
+
+    // 验证 dialogue 字段
+    if (!parsed.dialogue || !Array.isArray(parsed.dialogue)) {
+      throw new Error('对话格式错误：缺少 dialogue 数组')
+    }
+
+    return DialogueResultSchema.parse(parsed)
+  } catch (e: any) {
+    console.error('[generateDialogue] 解析失败:', e.message)
+    throw new Error('无法解析对话内容: ' + e.message)
+  }
 }

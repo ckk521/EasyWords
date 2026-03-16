@@ -113,7 +113,7 @@ export function Articles() {
     <div className="container mx-auto px-4 py-8 max-w-4xl">
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-3xl font-semibold">
-          我的文章
+          生词阅读
           <span className="text-lg font-normal text-gray-500 ml-3">
             共 {pagination.total} 篇
           </span>

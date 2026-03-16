@@ -16,6 +16,7 @@
     "@ai-sdk/openai": "^3.0.41",
     "@prisma/client": "^5.0.0",
     "ai": "^3.0.0",
+    "edge-tts": "^1.0.1",
     "next": "^14.2.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",

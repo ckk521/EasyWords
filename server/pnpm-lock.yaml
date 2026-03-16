@@ -17,6 +17,9 @@ importers:
       ai:
         specifier: ^3.0.0
         version: 3.4.33(react@18.3.1)(sswr@2.2.0(svelte@5.53.12))(svelte@5.53.12)(vue@3.5.30(typescript@5.9.3))(zod@3.25.76)
+      edge-tts:
+        specifier: ^1.0.1
+        version: 1.0.1(typescript@5.9.3)
       next:
         specifier: ^14.2.0
         version: 14.2.35(@opentelemetry/api@1.9.0)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
@@ -814,6 +817,11 @@ packages:
 
   eastasianwidth@0.2.0:
     resolution: {integrity: sha512-I88TYZWc9XiYHRQ4/3c5rjjfgkjhLyW2luGIheGERbNQ6OY7yTybanSpDXZa8y7VUP9YmDcYa+eyq4ca7iLqWA==}
+
+  edge-tts@1.0.1:
+    resolution: {integrity: sha512-Yv5S4y5k3bWC+0iyD6PDCOI0SLpBN5B1Mv6apgyWjhHzU8GDrBMv6BvT9lZBY5O/4Ow7KFcYaItXC/H0BFmewA==}
+    peerDependencies:
+      typescript: ^5.0.0
 
   emoji-regex@8.0.0:
     resolution: {integrity: sha512-MSjYzcWNOA0ewAHpz0MxpYFvwg6yjy1NG3xteoqz644VCo/RPgnr1/GGt+ic3iJTzQ8Eu3TdM14SawnVUmGE6A==}
@@ -1858,6 +1866,18 @@ packages:
   wrappy@1.0.2:
     resolution: {integrity: sha512-l4Sp/DRseor9wL6EvV2+TuQn63dMkPjZ/sp9XkghTEbV9KlPS1xUsZ3u7/IQO4wxtcFB4bgpQPRcR3QCvezPcQ==}
 
+  ws@8.19.0:
+    resolution: {integrity: sha512-blAT2mjOEIi0ZzruJfIhb3nps74PRWTCz1IjglWEEpQl5XS/UNama6u2/rjFkDDouqr4L67ry+1aGIALViWjDg==}
+    engines: {node: '>=10.0.0'}
+    peerDependencies:
+      bufferutil: ^4.0.1
+      utf-8-validate: '>=5.0.2'
+    peerDependenciesMeta:
+      bufferutil:
+        optional: true
+      utf-8-validate:
+        optional: true
+
   yocto-queue@0.1.0:
     resolution: {integrity: sha512-rVksvsnNCdJ/ohGc6xgPwyN8eheCxsiLM8mxuE/t/mOVqJewPuO1miLpTHQiRgTKCLexL4MeAFVagts7HmNZ2Q==}
     engines: {node: '>=10'}
@@ -2645,6 +2665,14 @@ snapshots:
       gopd: 1.2.0
 
   eastasianwidth@0.2.0: {}
+
+  edge-tts@1.0.1(typescript@5.9.3):
+    dependencies:
+      typescript: 5.9.3
+      ws: 8.19.0
+    transitivePeerDependencies:
+      - bufferutil
+      - utf-8-validate
 
   emoji-regex@8.0.0: {}
 
@@ -3975,6 +4003,8 @@ snapshots:
       strip-ansi: 7.2.0
 
   wrappy@1.0.2: {}
+
+  ws@8.19.0: {}
 
   yocto-queue@0.1.0: {}
 

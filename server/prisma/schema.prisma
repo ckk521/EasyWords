@@ -1,0 +1,57 @@
+// Prisma Schema for EasyWords
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// 单词表
+model Word {
+  id                String    @id @default(uuid())
+  word              String    @unique
+  phoneticUs        String
+  phoneticUk        String
+  chineseDefinition String
+  englishDefinition String
+  partOfSpeech      String?   // 词性
+  audioUs           String?   // 美式发音 URL
+  audioUk           String?   // 英式发音 URL
+  antonyms          String    @default("[]")  // JSON 存储反义词数组
+  sentences         String    // JSON 存储例句数组
+  synonyms          String    // JSON 存储近义词数组
+  createdAt         DateTime  @default(now())
+  lastReviewedAt    DateTime?
+  reviewCount       Int       @default(0)
+
+  @@map("words")
+}
+
+// 文章表
+model Article {
+  id           String   @id @default(uuid())
+  title        String   @default("")  // 文章标题
+  content      String
+  wordIds      String   // JSON 存储单词ID数组
+  type         String   // news | story
+  length       String   // short | medium | long
+  translations String   @default("{}")  // JSON 存储段落翻译 { "0": "翻译1", "1": "翻译2" }
+  createdAt    DateTime @default(now())
+
+  @@map("articles")
+}
+
+// 设置表
+model Settings {
+  id          String   @id @default("default")
+  apiKey      String?  // 加密存储
+  baseURL     String?  // API Base URL
+  model       String?  // 模型名称
+  apiProvider String?  // zhipu | custom
+  updatedAt   DateTime @updatedAt
+
+  @@map("settings")
+}

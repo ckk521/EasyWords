@@ -425,7 +425,7 @@ export async function generateArticle(
   length: 'short' | 'medium' | 'long',
   config: LLMConfig,
   topic?: string
-): Promise<string> {
+): Promise<{ title: string; content: string }> {
   const baseURL = config.baseURL || DEFAULT_BASE_URL
   const model = config.model || DEFAULT_MODEL
 

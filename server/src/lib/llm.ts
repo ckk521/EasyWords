@@ -418,6 +418,7 @@ ${synonymsPrompt}
 
 /**
  * 生成文章
+ * 返回 { title, content } 对象
  */
 export async function generateArticle(
   words: string[],

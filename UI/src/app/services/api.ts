@@ -428,4 +428,21 @@ export const api = {
   async deleteDialogue(id: string): Promise<void> {
     await request(`/dialogue/${id}`, { method: 'DELETE' });
   },
+
+  // TTS 文字转语音
+  async synthesizeSpeech(params: {
+    text: string;
+    lang?: string;
+    speaker?: 'A' | 'B';
+    speed?: number;
+  }): Promise<{ audio: string; format: string }> {
+    const response = await fetch(`${API_BASE}/tts`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(params),
+    });
+    const result = await response.json();
+    if (!result.success) throw new Error(result.error || '语音合成失败');
+    return result;
+  },
 };

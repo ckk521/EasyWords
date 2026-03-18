@@ -1,5 +1,8 @@
 // API: 快速查词（仅返回基本释义，用于移动端长按查词）
 import { NextRequest } from 'next/server'
+// 强制动态渲染，避免构建时预渲染
+export const dynamic = 'force-dynamic'
+
 import { successResponse, errorResponse, ErrorCodes, getApiConfig } from '@/lib/api-utils'
 
 export async function POST(request: NextRequest) {

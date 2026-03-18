@@ -1,5 +1,8 @@
 // API: 翻译文章段落
 import { NextRequest } from 'next/server'
+// 强制动态渲染，避免构建时预渲染
+export const dynamic = 'force-dynamic'
+
 import { prisma } from '@/lib/db'
 import { successResponse, errorResponse, ErrorCodes, getApiConfig } from '@/lib/api-utils'
 import { translateParagraph } from '@/lib/llm'

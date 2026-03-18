@@ -1,5 +1,8 @@
 // API: 推荐单词
 import { NextRequest } from 'next/server'
+// 强制动态渲染，避免构建时预渲染
+export const dynamic = 'force-dynamic'
+
 import { prisma } from '@/lib/db'
 import { successResponse, errorResponse, ErrorCodes } from '@/lib/api-utils'
 import { RecommendWordsSchema } from '@/lib/schemas'

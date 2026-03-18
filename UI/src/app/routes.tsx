@@ -40,6 +40,14 @@ export const router = createBrowserRouter([
     ),
   },
   {
+    path: '/index.html',
+    element: (
+      <Layout>
+        <Home />
+      </Layout>
+    ),
+  },
+  {
     path: '/vocabulary',
     element: (
       <Layout>

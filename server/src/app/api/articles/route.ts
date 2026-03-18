@@ -1,5 +1,8 @@
 // API: 文章列表 / 生成文章（支持流式输出）
 import { NextRequest } from 'next/server'
+// 强制动态渲染，避免构建时预渲染
+export const dynamic = 'force-dynamic'
+
 import { prisma } from '@/lib/db'
 import { successResponse, errorResponse, ErrorCodes, getApiConfig } from '@/lib/api-utils'
 import { GenerateArticleSchema } from '@/lib/schemas'

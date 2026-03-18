@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Badge } from '../components/ui/badge';
 import { api } from '../services/api';
 import { Word } from '../types/word';
-import { Search, Sparkles, Loader2, Trash2, Eye, Headphones } from 'lucide-react';
+import { Search, Sparkles, Loader2, Trash2, Eye, Headphones, FileText } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   Dialog,
@@ -33,6 +33,7 @@ export function Vocabulary() {
   const [generatingAudio, setGeneratingAudio] = useState(false);
   const [dialogueTopic, setDialogueTopic] = useState('');
   const [dialogueAccent, setDialogueAccent] = useState('en-US');
+  const [activeTab, setActiveTab] = useState<'article' | 'audio'>('article');
   const contentRef = useRef('');
 
   useEffect(() => {
@@ -287,150 +288,109 @@ export function Vocabulary() {
 
       {/* 生成控制栏 */}
       {words.length > 0 && (
-        <div className="sticky bottom-0 bg-white border-t shadow-lg p-4 rounded-t-lg">
-          {/* 已选词数 */}
-          <p className="text-sm text-gray-600 mb-3">
-            已选 <span className="font-semibold text-blue-600">{selectedIds.size}</span> 词
-          </p>
-
-          {/* 两个生成入口 */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            {/* 生成文章 */}
-            <div className="border rounded-lg p-4 bg-gray-50">
-              <h3 className="font-medium mb-3 flex items-center gap-2">
-                ✨ 生成文章
-              </h3>
-              <div className="flex gap-3 items-end mb-3">
-                <div className="flex-1">
-                  <label className="text-xs text-gray-600 mb-1 block">主题（可选）</label>
-                  <Input
-                    placeholder="如：环境保护、科技发展..."
-                    value={articleTopic}
-                    onChange={(e) => setArticleTopic(e.target.value)}
-                    className="h-9"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs text-gray-600 mb-1 block">类型</label>
-                  <Select value={articleType} onValueChange={(v: any) => setArticleType(v)}>
-                    <SelectTrigger className="w-[100px] h-9">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="news">新闻</SelectItem>
-                      <SelectItem value="story">故事</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <label className="text-xs text-gray-600 mb-1 block">长度</label>
-                  <Select value={articleLength} onValueChange={(v: any) => setArticleLength(v)}>
-                    <SelectTrigger className="w-[110px] h-9">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="short">短篇 (~200词)</SelectItem>
-                      <SelectItem value="medium">中篇 (~500词)</SelectItem>
-                      <SelectItem value="long">长篇 (~800词)</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  className="flex-1"
-                  onClick={() => handleRecommend(10)}
-                >
-                  <Sparkles className="size-4 mr-2" />
-                  推荐 10 词
-                </Button>
-                <Button
-                  className="flex-1"
-                  onClick={handleGenerate}
-                  disabled={selectedIds.size === 0 || generating}
-                >
-                  {generating ? (
-                    <>
-                      <Loader2 className="size-4 animate-spin mr-2" />
-                      生成中...
-                    </>
-                  ) : (
-                    '生成文章'
-                  )}
-                </Button>
-              </div>
+        <div className="sticky bottom-0 bg-white border-t shadow-lg p-3 rounded-t-lg">
+          {/* 已选词数 + Tab 切换 */}
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-sm text-gray-600">
+              已选 <span className="font-semibold text-blue-600">{selectedIds.size}</span> 词
+            </p>
+            <div className="flex bg-gray-100 rounded-lg p-0.5">
+              <button
+                className={`px-3 py-1 text-sm rounded-md transition-colors ${activeTab === 'article' ? 'bg-white shadow text-blue-600 font-medium' : 'text-gray-600'}`}
+                onClick={() => setActiveTab('article')}
+              >
+                <FileText className="size-4 inline mr-1" />
+                文章
+              </button>
+              <button
+                className={`px-3 py-1 text-sm rounded-md transition-colors ${activeTab === 'audio' ? 'bg-white shadow text-blue-600 font-medium' : 'text-gray-600'}`}
+                onClick={() => setActiveTab('audio')}
+              >
+                <Headphones className="size-4 inline mr-1" />
+                对话
+              </button>
             </div>
+          </div>
 
-            {/* 生成对话音频 */}
-            <div className="border rounded-lg p-4 bg-blue-50 border-blue-200">
-              <h3 className="font-medium mb-3 flex items-center gap-2">
-                <Headphones className="size-5 text-blue-600" />
-                生成对话音频
-                <span className="text-xs text-gray-500 font-normal">（最多 3 词）</span>
-              </h3>
-              <p className="text-sm text-gray-600 mb-3">
-                选择 1-3 个单词，AI 生成一段对话，通过听力加深记忆
-              </p>
-              <div className="mb-3">
-                <label className="text-xs text-gray-600 mb-1 block">主题（可选，最多10字）</label>
+          {/* 生成文章 */}
+          {activeTab === 'article' && (
+            <div className="space-y-2">
+              <div className="flex gap-2 flex-wrap">
                 <Input
-                  placeholder="如：职场面试、旅行计划..."
-                  value={dialogueTopic}
-                  onChange={(e) => setDialogueTopic(e.target.value.slice(0, 10))}
-                  className="h-9"
-                  maxLength={10}
+                  placeholder="主题（可选）"
+                  value={articleTopic}
+                  onChange={(e) => setArticleTopic(e.target.value)}
+                  className="flex-1 min-w-[120px] h-8 text-sm"
                 />
-                <p className="text-xs text-gray-400 mt-1 text-right">{dialogueTopic.length}/10</p>
-              </div>
-              <div className="mb-3">
-                <label className="text-xs text-gray-600 mb-1 block">口音</label>
-                <Select value={dialogueAccent} onValueChange={setDialogueAccent}>
-                  <SelectTrigger className="w-full h-9">
+                <Select value={articleType} onValueChange={(v: any) => setArticleType(v)}>
+                  <SelectTrigger className="w-[80px] h-8 text-sm">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="en-US">🇺🇸 美式英语</SelectItem>
-                    <SelectItem value="en-GB">🇬🇧 英式英语</SelectItem>
-                    <SelectItem value="en-IN">🇮🇳 印度英语</SelectItem>
-                    <SelectItem value="en-AU">🇦🇺 澳洲英语</SelectItem>
+                    <SelectItem value="news">新闻</SelectItem>
+                    <SelectItem value="story">故事</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Select value={articleLength} onValueChange={(v: any) => setArticleLength(v)}>
+                  <SelectTrigger className="w-[90px] h-8 text-sm">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="short">短篇</SelectItem>
+                    <SelectItem value="medium">中篇</SelectItem>
+                    <SelectItem value="long">长篇</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
               <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  className="flex-1"
-                  onClick={() => handleRecommend(3)}
-                >
-                  <Sparkles className="size-4 mr-2" />
-                  推荐 3 词
+                <Button variant="outline" size="sm" className="flex-1 h-8 text-sm" onClick={() => handleRecommend(10)}>
+                  <Sparkles className="size-3.5 mr-1" />推荐
                 </Button>
-                <Button
-                  className="flex-1 bg-blue-600 hover:bg-blue-700"
-                  onClick={handleGenerateAudio}
-                  disabled={selectedIds.size === 0 || selectedIds.size > 3 || generatingAudio}
-                >
-                  {generatingAudio ? (
-                    <>
-                      <Loader2 className="size-4 animate-spin mr-2" />
-                      生成中...
-                    </>
-                  ) : (
-                    <>
-                      <Headphones className="size-4 mr-2" />
-                      生成对话音频
-                    </>
-                  )}
+                <Button size="sm" className="flex-1 h-8 text-sm" onClick={handleGenerate} disabled={selectedIds.size === 0 || generating}>
+                  {generating ? <Loader2 className="size-3.5 animate-spin mr-1" /> : null}
+                  生成文章
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* 生成对话音频 */}
+          {activeTab === 'audio' && (
+            <div className="space-y-2">
+              <div className="flex gap-2">
+                <Input
+                  placeholder="主题（可选，10字内）"
+                  value={dialogueTopic}
+                  onChange={(e) => setDialogueTopic(e.target.value.slice(0, 10))}
+                  className="flex-1 h-8 text-sm"
+                  maxLength={10}
+                />
+                <Select value={dialogueAccent} onValueChange={setDialogueAccent}>
+                  <SelectTrigger className="w-[110px] h-8 text-sm">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="en-US">🇺🇸 美式</SelectItem>
+                    <SelectItem value="en-GB">🇬🇧 英式</SelectItem>
+                    <SelectItem value="en-IN">🇮🇳 印度</SelectItem>
+                    <SelectItem value="en-AU">🇦🇺 澳洲</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" className="flex-1 h-8 text-sm" onClick={() => handleRecommend(3)}>
+                  <Sparkles className="size-3.5 mr-1" />推荐
+                </Button>
+                <Button size="sm" className="flex-1 h-8 text-sm bg-blue-600 hover:bg-blue-700" onClick={handleGenerateAudio} disabled={selectedIds.size === 0 || selectedIds.size > 3 || generatingAudio}>
+                  {generatingAudio ? <Loader2 className="size-3.5 animate-spin mr-1" /> : <Headphones className="size-3.5 mr-1" />}
+                  生成对话
                 </Button>
               </div>
               {selectedIds.size > 3 && (
-                <p className="text-xs text-red-500 mt-2 text-center">
-                  当前已选 {selectedIds.size} 词，超出限制
-                </p>
+                <p className="text-xs text-red-500 text-center">已选 {selectedIds.size} 词，对话最多选 3 词</p>
               )}
             </div>
-          </div>
+          )}
         </div>
       )}
 

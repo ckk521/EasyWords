@@ -368,8 +368,8 @@ export async function lookupWord(word: string, config: LLMConfig): Promise<Looku
       : '请生成3个常用例句（英文+中文翻译）'
 
     const synonymsPrompt = hasSynonyms
-      ? `同义词：${dictResult.synonyms.join(', ')}\n请为每个英文同义词说明与原词的使用区别并提供例句`
-      : '请提供3个英文近义词并说明区别'
+      ? `同义词：${dictResult.synonyms.join(', ')}\n请为每个英文同义词说明与原词的使用区别并提供例句。如果同义词少于3个，请补充到3-5个常用近义词。`
+      : '请提供3-5个英文近义词并说明区别，优先提供常用词。'
 
     const prompt = `为单词"${word}"生成以下内容：
 英文释义：${dictResult.englishDefinition}
@@ -381,7 +381,10 @@ ${synonymsPrompt}
 
 【重要】返回简洁JSON格式：
 {"chineseDefinition":"中文释义","sentences":[{"en":"英文例句","zh":"中文翻译"}],"synonyms":[{"word":"英文近义词","difference":"中文说明区别","example":"英文例句"}]}
-注意：synonyms.word 必须是英文单词，不能是中文翻译！sentences 至少3个，synonyms 至少3个。
+注意：
+1. synonyms.word 必须是英文单词，不能是中文翻译！
+2. sentences 必须有 3 个
+3. synonyms 必须有 3-5 个近义词，优先提供常用词
 只返回JSON，不要额外说明。`
 
     const text = await callChatAPI(config, [{ role: 'user', content: prompt }])
@@ -404,10 +407,13 @@ ${synonymsPrompt}
     }
   } else {
     // 无词典数据，大模型生成全部
-    const prompt = `为单词"${word}"生成词典信息：音标、中英文释义、3个例句、3个英文近义词。
+    const prompt = `为单词"${word}"生成词典信息：音标、中英文释义、3个例句、3-5个英文近义词。
 【重要】返回简洁JSON格式：
 {"phoneticUs":"/音标/","phoneticUk":"/音标/","chineseDefinition":"中文释义","englishDefinition":"英文释义","sentences":[{"en":"英文例句","zh":"中文翻译"}],"synonyms":[{"word":"英文近义词","difference":"中文说明区别","example":"英文例句"}]}
-注意：synonyms.word 必须是英文单词，不能是中文翻译！sentences 和 synonyms 都至少3个。
+注意：
+1. synonyms.word 必须是英文单词，不能是中文翻译！
+2. sentences 必须有 3 个
+3. synonyms 必须有 3-5 个近义词，优先提供常用词
 只返回JSON，不要额外说明。`
 
     const text = await callChatAPI(config, [{ role: 'user', content: prompt }])
@@ -637,8 +643,8 @@ export async function* lookupWordStream(
       : '请生成3个常用例句（英文+中文翻译）'
 
     const synonymsPrompt = hasSynonyms
-      ? `同义词：${dictResult.synonyms.join(', ')}\n请为每个英文同义词说明与原词的使用区别并提供例句`
-      : '请提供3个英文近义词并说明区别'
+      ? `同义词：${dictResult.synonyms.join(', ')}\n请为每个英文同义词说明与原词的使用区别并提供例句。如果同义词少于3个，请补充到3-5个常用近义词。`
+      : '请提供3-5个英文近义词并说明区别，优先提供常用词。'
 
     prompt = `为单词"${word}"生成以下内容：
 英文释义：${dictResult.englishDefinition}
@@ -650,13 +656,19 @@ ${synonymsPrompt}
 
 【重要】返回简洁JSON格式：
 {"chineseDefinition":"中文释义","sentences":[{"en":"英文例句","zh":"中文翻译"}],"synonyms":[{"word":"英文近义词","difference":"中文说明区别","example":"英文例句"}]}
-注意：synonyms.word 必须是英文单词，不能是中文翻译！sentences 至少3个，synonyms 随机3-5个。
+注意：
+1. synonyms.word 必须是英文单词，不能是中文翻译！
+2. sentences 必须有 3 个
+3. synonyms 必须有 3-5 个近义词，优先提供常用词
 只返回JSON，不要额外说明。`
   } else {
     prompt = `为单词"${word}"生成词典信息：音标、中英文释义、3个例句、3-5个英文近义词。
 【重要】返回简洁JSON格式：
 {"phoneticUs":"/音标/","phoneticUk":"/音标/","chineseDefinition":"中文释义","englishDefinition":"英文释义","sentences":[{"en":"英文例句","zh":"中文翻译"}],"synonyms":[{"word":"英文近义词","difference":"中文说明区别","example":"英文例句"}]}
-注意：synonyms.word 必须是英文单词，不能是中文翻译！sentences 3个，synonyms 随机3-5个。
+注意：
+1. synonyms.word 必须是英文单词，不能是中文翻译！
+2. sentences 必须有 3 个
+3. synonyms 必须有 3-5 个近义词，优先提供常用词
 只返回JSON，不要额外说明。`
   }
 

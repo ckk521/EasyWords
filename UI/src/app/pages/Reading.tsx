@@ -267,17 +267,25 @@ export function Reading() {
 
   // 渲染带高亮的段落内容
   const renderParagraph = (text: string) => {
-    // 将 **word** 格式转换为高亮显示
+    // 创建生词集合（小写，用于匹配）
+    const wordSet = new Set(article?.words.map(w => w.word.toLowerCase()) || []);
+
+    // 将 **word** 格式转换为高亮显示（只高亮真正的生词）
     const parts = text.split(/(\*\*[^*]+\*\*)/g);
 
     return parts.map((part, index) => {
       if (part.startsWith('**') && part.endsWith('**')) {
         const word = part.slice(2, -2);
-        return (
-          <strong key={index} className="font-bold text-blue-600 bg-blue-50 px-1 rounded">
-            {word}
-          </strong>
-        );
+        // 只有在生词列表中的才高亮显示
+        if (wordSet.has(word.toLowerCase())) {
+          return (
+            <strong key={index} className="font-bold text-blue-600 bg-blue-50 px-1 rounded">
+              {word}
+            </strong>
+          );
+        }
+        // 不在生词列表中的，移除星号但不高亮
+        return <span key={index}>{word}</span>;
       }
       return <span key={index}>{part}</span>;
     });

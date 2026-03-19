@@ -6,6 +6,9 @@ import { Settings } from './pages/Settings';
 import { Articles } from './pages/Articles';
 import { Dialogue } from './pages/Dialogue';
 import { Dialogues } from './pages/Dialogues';
+import { Speak } from './pages/Speak';
+import { SpeakConversation } from './pages/SpeakConversation';
+import { SpeakHistory } from './pages/SpeakHistory';
 import { Header } from './components/layout/Header';
 import { Toaster } from './components/ui/sonner';
 import { WelcomeDialog } from './components/WelcomeDialog';
@@ -84,6 +87,30 @@ export const router = createBrowserRouter([
     element: (
       <Layout>
         <Dialogues />
+      </Layout>
+    ),
+  },
+  {
+    path: '/speak',
+    element: (
+      <Layout>
+        <Speak />
+      </Layout>
+    ),
+  },
+  {
+    path: '/speak/conversation',
+    element: (
+      <Layout>
+        <SpeakConversation />
+      </Layout>
+    ),
+  },
+  {
+    path: '/speak/history',
+    element: (
+      <Layout>
+        <SpeakHistory />
       </Layout>
     ),
   },

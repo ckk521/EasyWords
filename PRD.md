@@ -1,7 +1,7 @@
 # EasyWords - 产品需求文档 (PRD)
 
-> 版本：V2.0
-> 更新日期：2026-03-16
+> 版本：V3.0
+> 更新日期：2026-03-18
 > 状态：需求定义完成
 
 ---
@@ -140,7 +140,7 @@ EasyWords
 | F-301 选择内容类型 | 新闻 / 故事 | P0 |
 | F-302 选择内容长度 | 短篇（~200词）/ 中篇（~500词）/ 长篇（~800词） | P0 |
 | F-303 生成内容 | 调用大模型生成文章 | P0 |
-| F-304 生词加粗 | 在文章中加粗显示选中的生词（仅标记给定生词） | P0 |
+| F-304 生词加粗 | 在文章中加粗显示选中的生词（仅标记给定生词，需验证是否在生词列表中） | P0 |
 | F-305 标记已复习 | 阅读完成后更新单词的「上次复习时间」 | P0 |
 | F-306 重新生成 | 不满意可重新生成 | P1 |
 | F-307 移动端查词 | 长按单词查看基本释义（移动端），双击查词（PC端） | P1 |
@@ -155,11 +155,18 @@ EasyWords
 2. 自然地融入所有给定单词，不要生硬堆砌
 3. 内容连贯、有逻辑，适合中级英语学习者阅读
 4. 难度适中，句式不要过于复杂
+5. **非常重要**：只有「给定单词列表」中的单词才需要用双星号包裹（如 **word**），其他任何单词都不要加星号！
 
-单词列表：[word1, word2, word3, ...]
+给定单词列表（只有这些词需要加 ** 标记）：[word1, word2, word3, ...]
 
-请直接输出文章内容，不需要标题。
+请先输出一个简短的英文标题（一行），然后空一行，再输出文章内容。
 ```
+
+**前端渲染规则：**
+- 解析 `**word**` 格式
+- **必须验证** word 是否在生词列表中
+- 只有真正的生词才高亮显示
+- 非生词移除星号但不高亮
 
 #### 模块四：对话音频生成（V2.0 新增）
 
@@ -181,20 +188,27 @@ EasyWords
 1. 两人对话形式（A 和 B），自然融入所有单词
 2. 对话场景贴近日常生活或工作
 3. 语言地道，适合中级学习者
-4. 每个单词至少出现一次
+4. 每个单词至少出现一次，用 **单词** 格式标记
+5. **非常重要**：只有「给定单词列表」中的单词才需要用双星号包裹
 
-单词列表：[word1, word2, word3]
+单词列表（只有这些词需要加 ** 标记）：[word1, word2, word3]
 
 返回 JSON 格式：
 {
   "scene": "场景描述",
   "dialogue": [
-    {"speaker": "A", "text": "对话内容，包含 word1"},
-    {"speaker": "B", "text": "对话内容，包含 word2"},
+    {"speaker": "A", "text": "对话内容，包含 **word1**"},
+    {"speaker": "B", "text": "对话内容，包含 **word2**"},
     {"speaker": "A", "text": "..."}
   ]
 }
 ```
+
+**前端渲染规则：**
+- 解析 `**word**` 格式
+- **必须验证** word 是否在生词列表中
+- 只有真正的生词才高亮显示
+- 非生词移除星号但不高亮
 
 **技术实现方案：**
 
@@ -675,55 +689,476 @@ interface DialogueLine {
 - 云端同步
 - 社交功能（分享文章/视频）
 
-### V3.0 口语练习（TODO - 待详细设计）
+### V3.0 AI 口语陪练（SpeakV2 整合）
 
-> 状态：需求讨论中
-> 更新日期：2026-03-16
+> 状态：需求已确认
+> 更新日期：2026-03-18
+> 来源：SpeakV2 模块整合
 
-#### 功能概述
+#### 产品定位
 
-用户说英语，AI 识别后用英语回复，形成真实对话练习。识别失败时 AI 猜测意图并确认。
+**核心价值**：让 AI 成为用户的英语语伴，在口语对话中多频次使用生词本中的单词，加深记忆。
+
+**与生词本的关联**：
+- 用户可从生词本选择单词带入对话场景
+- AI 在对话中自然使用这些生词
+- 每次对话都是一次生词复习
+
+#### 功能架构
 
 ```
-用户说英语 ──► 语音识别(ASR) ──► AI理解并回复 ──► TTS播放
-     ▲                                          │
-     └──────────────── 循环对话 ◄───────────────┘
+EasyWords V3.0
+├── 模块一：查词与生词本（已有）
+│
+├── 模块二：选词与推荐（已有）
+│
+├── 模块三：内容生成与阅读（已有）
+│
+├── 模块四：对话音频生成（V2.0 已有）
+│
+└── 模块五：AI 口语陪练（V3.0 新增）  ← SpeakV2 整合
+    ├── 场景选择（餐厅点餐、问路、面试、购物、闲聊）
+    ├── 难度选择（初级/中级/高级）
+    ├── 按住说话模式
+    ├── 自由对话模式
+    ├── 生词带入对话
+    ├── 对话记录
+    └── 学习反馈（语法纠错、表达建议）
 ```
 
-#### 核心需求
+#### 功能清单
 
-| 环节 | 功能 | 说明 |
-|------|------|------|
-| 语音输入 | 用户说英语 | 浏览器录音权限、音频采集 |
-| 语音识别 | 转为文本 | 置信度判断，低置信度时猜测确认 |
-| AI 对话 | 英语回复 | 复用现有 LLM 能力 |
-| 语音合成 | 播放回复 | 复用现有 Web Speech API |
+| 编号 | 功能模块 | 功能点 | 描述 | 优先级 |
+|------|----------|--------|------|--------|
+| F-501 | 场景选择 | 选择难度等级 | 初级/中级/高级 | P0 |
+| F-502 | 场景选择 | 选择对话场景 | 点餐、问路、面试、购物、闲聊 | P0 |
+| F-503 | 语音交互 | 按住说话模式 | 按住按钮说话，松开后自动发送 | P0 |
+| F-504 | 语音交互 | AI 语音回复 | AI 以语音形式回复，响应时间 < 1.5s | P0 |
+| F-505 | 语音交互 | 自由对话模式 | 开启后像打电话一样与 AI 对话 | P0 |
+| F-505a | 语音交互 | 自由对话超时保护 | 5秒无说话提示，3秒倒计时后自动发送，避免占用资源 | P0 |
+| F-506 | 对话过程 | 多轮对话 | 持续与 AI 进行多轮对话 | P0 |
+| F-507 | 对话过程 | 对话记录 | 显示对话的文字记录 | P0 |
+| F-508 | 学习反馈 | 语法纠错 | 对话结束后展示语法错误 | P0 |
+| F-509 | 学习反馈 | 表达建议 | 提供更好的表达方式建议 | P0 |
+| F-510 | 对话管理 | 重新开始对话 | 随时重置当前对话 | P1 |
+| F-511 | 对话管理 | 切换场景 | 在不同场景之间切换 | P1 |
+| F-512 | 生词关联 | 选择生词带入对话 | 从生词本选择单词，AI 在对话中使用 | P1 |
+| F-513 | 学习记录 | 历史记录 | 查看过往练习记录 | P1 |
+
+#### 交互模式
+
+**模式一：按住说话**
+- 用户长按按钮录音，松开自动发送
+- 显示录音状态和时长
+- 支持最长 60 秒单条语音
+- 支持上滑取消发送
+
+**模式二：自由对话**
+- 点击开启后持续监听麦克风
+- VAD 自动检测用户说话状态
+- 静音 1.5 秒后自动发送
+- AI 回复完成后自动恢复监听
+- **超时保护机制**：
+  - 如果用户 5 秒内没有开始说话，显示提示「3秒后将自动发送当前语音」
+  - 倒计时 3 秒后自动发送已识别的内容（如果有）
+  - 如果没有任何识别内容，自动结束本次录音，等待用户再次说话
+  - 目的：避免长时间占用语音识别资源，节省系统开销
+
+#### 对话场景设计
+
+| 场景 | 难度适配 | 场景描述 | 学习目标 |
+|------|----------|----------|----------|
+| **餐厅点餐** | 初/中/高 | 在餐厅与服务员对话 | 餐饮词汇、礼貌请求、数量表达 |
+| **问路导航** | 初/中/高 | 向路人询问如何到达目的地 | 方向词汇、位置描述、理解指示 |
+| **求职面试** | 中/高 | 模拟英文面试场景 | 自我介绍、职业表达、应对问题 |
+| **商场购物** | 初/中/高 | 在商店与店员交流购买商品 | 价格询问、尺寸颜色、讨价还价 |
+| **日常闲聊** | 初/中/高 | 与朋友进行日常对话 | 话题展开、情感表达、地道表达 |
+
+#### 生词关联机制
+
+```
+用户从生词本选择单词
+        │
+        ▼
+  选择对话场景/难度
+        │
+        ▼
+  AI 生成开场白（自然融入生词）
+        │
+        ▼
+  对话过程中 AI 持续使用这些生词
+        │
+        ▼
+  对话结束后标记生词已复习
+```
 
 #### 技术方案
 
-| 方案 | ASR | TTS | 成本 | 说明 |
-|------|-----|-----|------|------|
-| 方案一（推荐） | Web Speech API | Web Speech API | 免费 | 浏览器原生，Chrome/Edge 支持好 |
-| 方案二 | 智谱 ASR | Web Speech API | 按量计费 | 与现有 LLM 统一技术栈 |
-| 方案三 | OpenAI Whisper | OpenAI TTS | 按量计费 | 效果最好，成本高 |
+| 环节 | 技术方案 | 成本 | 说明 |
+|------|----------|------|------|
+| **语音识别(ASR)** | Web Speech API | 免费 | Chrome/Edge 支持好，即时响应 |
+| **对话生成(LLM)** | GLM-4-FLASH | 极低 | ¥0.0001/千tokens |
+| **语音合成(TTS)** | Web Speech API（主） | 免费 | 即时播放，无延迟 |
+| **语音合成(TTS)** | Edge TTS（备选） | 免费 | 质量更好但有延迟 |
 
-#### 练习模式
+#### TTS 方案说明
 
-| 模式 | 描述 | 适用场景 |
+**主方案：Web Speech API（浏览器原生）**
+- 优点：即时播放，无延迟，免费
+- 缺点：音质一般，依赖浏览器支持
+- 适用：口语对话场景（响应速度优先）
+
+**备选方案：Edge TTS（服务端）**
+- 优点：音质更好，多音色
+- 缺点：生成需要 ~10 秒延迟
+- 适用：非实时场景（音质优先）
+
+#### AI 回复规则
+
+| 难度 | 句子数 | 语言特点 | 生词要求 |
+|------|--------|----------|----------|
+| **初级** | 1-2 句 | 简单词汇，短句 | 每次回复包含 1-2 个生词 |
+| **中级** | 2-3 句 | 中等词汇，自然表达 | 每次回复包含 1-2 个生词 |
+| **高级** | 1-5 句 | 高级词汇，复杂句式 | 每次回复包含 1-2 个生词 |
+
+**开场白规则：**
+- 初级：1 句简短开场白
+- 中级/高级：1-2 句开场白
+- 如有生词，开场白中自然融入 1-2 个生词
+
+#### 成本估算（MVP 阶段）
+
+| 服务 | 月调用量 | 月成本 |
+|------|----------|--------|
+| ASR（Web Speech API） | 无限制 | **免费** |
+| LLM (GLM-4-FLASH) | ~500 万 tokens | ~¥1（新用户免费额度够用） |
+| TTS (Web Speech API) | 无限制 | **免费** |
+| **合计** | - | **~¥0-1/月** |
+
+#### 用户故事
+
+**US-011：选择场景开始对话**
+> 作为学习者，我选择对话场景和难度，开始与 AI 进行口语练习。
+
+**验收标准：**
+- 显示至少 5 个可选场景
+- 每个场景显示简要说明和学习目标
+- 支持 3 个难度等级选择
+- 选择后可直接进入对话
+
+**US-012：按住说话进行对话**
+> 作为学习者，我按住按钮说话，松开后 AI 用语音回复，模拟真实对话。
+
+**验收标准：**
+- 按住时显示录音状态和时长
+- 松开后 AI 立即显示文字回复
+- AI 语音即时播放（使用 Web Speech API，无延迟）
+- AI 回复时显示正在播放语音的状态
+- 回复符合难度规则（初级 1-2 句，中级 2-3 句，高级 1-5 句）
+- 如有生词，回复中包含 1-2 个生词
+
+**US-013：自由对话模式**
+> 作为学习者，我开启自由对话模式，像打电话一样与 AI 对话。
+
+**验收标准：**
+- 点击开启后持续监听
+- VAD 自动检测说话状态
+- 静音 1.5 秒后自动发送
+- 点击关闭退出模式
+
+**US-014：生词带入对话**
+> 作为学习者，我从生词本选择单词带入对话，AI 在对话中使用这些词。
+
+**验收标准：**
+- 可选择 1-5 个生词
+- AI 在对话中自然融入这些生词
+- 对话结束后更新生词复习时间
+
+**US-015：查看学习反馈**
+> 作为学习者，我在对话结束后看到语法纠错和更好的表达建议。
+
+**验收标准：**
+- 对话结束时自动生成反馈
+- 标注语法错误（高亮显示）
+- 提供正确的表达方式
+- 提供更地道的表达建议
+
+#### 待后续版本优化
+
+| 功能 | 描述 | 优先级 |
+|------|------|--------|
+| F-514 | 自由对话中的打断能力 | P2 |
+| F-515 | 学习激励（打卡/进度） | P2 |
+| F-516 | 社交功能（排行榜） | P3 |
+
+---
+
+## 十一、更新日志
+
+### 2026-03-18 V3.0 更新
+
+**1. TTS 方案优化**
+- 主方案改为 Web Speech API（即时播放，无延迟）
+- Edge TTS 作为备选方案（音质更好但有 ~10 秒延迟）
+- 删除付费 ASR 降级方案，成本降至 ¥0-1/月
+
+**2. AI 回复规则细化**
+- 初级：1-2 句，简单词汇短句
+- 中级：2-3 句，中等词汇自然表达
+- 高级：1-5 句，高级词汇复杂句式
+- 所有级别：每次回复必须包含 1-2 个生词
+
+**3. 生词高亮修复**
+- 前端渲染时验证 `**word**` 是否在生词列表中
+- 只有真正的生词才高亮显示
+- LLM 错误标记的非生词移除星号但不高亮
+
+**4. 开场白规则**
+- 如有生词，开场白中自然融入 1-2 个生词
+- 初级：1 句简短开场白
+- 中级/高级：1-2 句开场白
+
+**5. Prompt 优化**
+- 文章生成和对话生成都强调「只有给定单词列表中的单词才需要标记」
+- 增加前端渲染验证规则的文档说明
+
+### 2026-03-19 V3.0 优化更新
+
+**1. TTS 优化**
+- AI 语音播放时自动过滤 emoji 和特殊符号，只读纯英文文本
+- LLM prompt 中明确要求「不使用任何 emoji、图标或特殊符号」
+
+**2. 生词使用规则优化**
+- 原规则：每次回复必须使用 1-2 个生词（过于生硬）
+- 新规则：AI 在 2-3 轮对话内至少使用 1 个生词，更自然地融入对话
+
+**3. 语音识别优化（按住说话）**
+- 改为连续识别模式（continuous: true），用户可持续说话
+- 最高支持 60 秒录音时长
+- 松开按钮后等待识别完全结束再发送，避免最后内容丢失
+- 累积所有识别结果（最终结果 + 临时结果），确保完整
+
+**4. 对话音频预生成优化**
+- 播放当前句时同时预加载下一句音频
+- 句与句之间几乎无等待，播放更流畅
+- 使用 preloadingRef 管理预加载状态
+
+**5. 口语陪练界面优化**
+- 「开始练习」和「查看练习记录」按钮并排显示
+- 移除步骤指示器（选择场景与难度 → 开始练习）
+- 开始练习按钮移除箭头图标
+- 练习提示简化：「AI 会在对话中带入生词」
+
+**6. AI 对话引导优化**
+- AI 在对话中主动引导用户多说话
+- 每次回复必须以开放式问题结尾
+- 鼓励用户分享观点、经历、偏好等
+- 正向反馈机制：反馈报告中新增「goodExpressions」字段，对说得好的句子给予鼓励
+
+---
+
+## 十二、AI 提示词设计规范
+
+> 本节记录口语陪练模块的提示词设计原则和具体配置
+> 更新日期：2026-03-19
+
+### 12.1 对话引导原则
+
+**核心目标**：让用户在对话中多说，AI 作为引导者而非主导者。
+
+**设计理念**：
+1. **开放式问题**：AI 每次回复必须以开放式问题结尾，引导用户继续表达
+2. **话题延伸**：询问用户的观点、经历、偏好，而非仅进行信息交换
+3. **自然互动**：适度分享相关经历建立 rapport，然后询问用户的经历
+4. **正向鼓励**：对用户的回应表示兴趣，避免让用户感到被"考试"
+
+### 12.2 难度级别配置
+
+| 难度 | 回复长度 | 语言特点 | 示例开场白 |
+|------|----------|----------|------------|
+| **初级** | 1-2 句 | 简单词汇，短句 | "Hello! Welcome to our restaurant. I'm here to help you today. First, tell me, what kind of food do you usually like to eat?" |
+| **中级** | 2-3 句 | 中等词汇，自然表达 | "Good evening! Welcome. Before I show you the menu, I'd love to know - what brings you here tonight? Are you celebrating something special?" |
+| **高级** | 1-5 句 | 高级词汇，复杂句式 | "Good evening, and welcome. I notice you seem like someone who appreciates good food. What's the most memorable meal you've ever had?" |
+
+### 12.3 对话场景提示词
+
+#### 餐厅点餐 (restaurant)
+
+**初级提示词**：
+> You are a friendly waiter at a casual restaurant. Your goal is to help the customer practice English speaking. Use simple sentences and speak slowly. Always ask open-ended follow-up questions to encourage the customer to speak more. For example, ask about their preferences, what they like to eat, or if they have any food allergies. Be patient and encouraging.
+
+**中级提示词**：
+> You are a professional waiter at a nice restaurant. Your goal is to help the customer practice English through natural conversation. Engage them with questions about their dining preferences, past restaurant experiences, or favorite cuisines. Ask follow-up questions to keep them talking. Make the conversation feel natural and enjoyable.
+
+**高级提示词**：
+> You are an experienced sommelier and waiter at an upscale restaurant. Help the customer practice sophisticated English. Discuss food pairings, cooking techniques, and wine selections. Ask thought-provoking questions about their culinary experiences and preferences. Encourage detailed responses.
+
+#### 问路导航 (directions)
+
+**初级提示词**：
+> You are a friendly local helping a tourist find their way. Your goal is to help them practice English. After giving simple directions, ask follow-up questions to encourage more conversation. Ask where they are from, what they plan to do there, or if they need help with anything else.
+
+**中级提示词**：
+> You are a helpful local giving directions. Practice natural English conversation by asking about their trip - where are they from, how long are they visiting, what places have they already seen. Provide directions while keeping the conversation going.
+
+**高级提示词**：
+> You are a local expert who knows the area well. Engage in deeper conversation about the place they want to visit. Ask about their interest in that location, recommend local spots, and share interesting facts. Encourage them to share their travel experiences.
+
+#### 求职面试 (interview)
+
+**中级提示词**：
+> You are a professional HR interviewer. Help the candidate practice interview English. Ask one question at a time, then follow up on their answers to encourage more detailed responses. Ask about their experiences, skills, and why they want the job. Be encouraging and give them time to express themselves.
+
+**高级提示词**：
+> You are a senior hiring manager. Conduct a realistic interview to help them practice professional English. After each answer, dig deeper with follow-up questions. Ask behavioral questions like "Tell me about a time when..." and probe for specific details. Help them practice articulating complex ideas clearly.
+
+#### 商场购物 (shopping)
+
+**初级提示词**：
+> You are a friendly shop assistant. Help customers practice English shopping vocabulary. Ask questions about what they are looking for, their preferences, and what occasion they are shopping for. Encourage them to describe what they want in detail.
+
+**中级提示词**：
+> You are a helpful sales associate at a clothing store. Engage customers in natural conversation about their style preferences, favorite brands, or shopping habits. Ask follow-up questions to keep the conversation flowing while helping them find what they need.
+
+**高级提示词**：
+> You are a personal shopper at a high-end boutique. Have sophisticated conversations about fashion, style, and personal image. Ask about their lifestyle, fashion inspirations, and preferences. Encourage them to express their personal style in detail.
+
+#### 日常闲聊 (casual)
+
+**初级提示词**：
+> You are a friendly person having a casual chat. Your main goal is to help them practice everyday English. After they respond, always ask a follow-up question about their life, hobbies, family, or weekend plans. Keep the conversation light and fun while encouraging them to speak more.
+
+**中级提示词**：
+> You are a friend having a relaxed conversation. Actively engage them in topics like hobbies, movies, books, travel, or weekend plans. Share your own experiences briefly, then ask about theirs. Use natural expressions and encourage detailed responses.
+
+**高级提示词**：
+> You are an interesting conversationalist. Have deep, meaningful conversations about topics like travel experiences, cultural differences, current events, or personal growth. Ask thought-provoking questions that encourage them to express opinions and share detailed stories.
+
+### 12.4 通用对话引导规则
+
+以下规则会自动添加到所有场景的提示词中：
+
+```
+【重要规则】
+- Your response MUST be exactly {1-2/2-3/1-5} sentences. Do not exceed this limit.
+- {Use simple vocabulary/Use moderate vocabulary/Use sophisticated vocabulary}.
+- Do NOT use any emojis, icons, or special symbols. Only use plain English text.
+
+【引导对话规则】
+- ALWAYS end your response with an open-ended follow-up question to encourage the learner to speak more.
+- Ask about their opinions, experiences, preferences, or details related to the topic.
+- If they give a short answer, gently encourage elaboration (e.g., "That's interesting! Can you tell me more about that?").
+- Keep the conversation flowing naturally by showing genuine interest in what they say.
+- Occasionally share brief relevant experiences to build rapport, then ask about theirs.
+
+【生词使用】(如有关联生词)
+- VOCABULARY WORDS TO USE: {word1, word2, ...}
+- You MUST use at least 1 of these vocabulary words within every 2-3 turns of conversation.
+- Try to use 1 vocabulary word in your current response if you haven't used one recently.
+- Use the words naturally in context, do not force them awkwardly.
+```
+
+### 12.5 学习反馈提示词
+
+**反馈类型**：
+1. **grammarErrors**：语法错误（最多 3 个）
+2. **betterExpressions**：更好的表达建议（最多 2 个）
+3. **goodExpressions**：说得好的句子（正向鼓励，所有说得好的句子都要列出）
+
+**提示词规范**：
+```
+你是一位专业的英语口语教练。请分析以下用户的英语口语表达，给出学习反馈。
+
+用户说的话：
+{用户所有发言}
+
+请返回 JSON 格式的反馈：
+{
+  "grammarErrors": [
+    {
+      "userSentence": "用户的原句（英文）",
+      "correctedSentence": "正确的句子（英文）",
+      "errorType": "错误类型（中文，如：时态错误、冠词缺失等）",
+      "explanation": "中文解释错误原因和改正方法"
+    }
+  ],
+  "betterExpressions": [
+    {
+      "userSentence": "用户的原句（英文）",
+      "suggestedExpression": "更好的表达方式（英文）",
+      "reason": "用中文说明为什么这个表达更地道、更自然"
+    }
+  ],
+  "goodExpressions": [
+    {
+      "userSentence": "用户的原句（英文）",
+      "praise": "用中文说明为什么这句话说得好，鼓励用户（如：用词准确、句式地道、表达自然等）"
+    }
+  ]
+}
+
+【重要规则】
+- 每个用户句子都必须出现在 goodExpressions、grammarErrors 或 betterExpressions 中至少一个
+- 对于没有语法错误且表达自然的句子，必须放入 goodExpressions 给予正向鼓励
+- praise 字段用中文写，具体说明优点
+```
+
+### 12.6 开场白生成提示词
+
+当用户选择生词带入对话时，系统会生成融入生词的开场白：
+
+```
+{场景系统提示词}
+
+Generate an opening line that naturally includes 1-2 of these words: {word1, word2, ...}
+Requirements:
+- Keep it to {1 short sentence / 1-2 sentences} (根据难度)
+- Make it natural and friendly
+- Do not emphasize the words awkwardly
+- Do NOT use any emojis, icons, or special symbols. Only use plain English text.
+- Output ONLY the opening line, nothing else
+```
+
+### 12.7 对话回复提示词完整示例
+
+以「餐厅点餐 + 中级难度 + 生词: determine, brilliant」为例，最终发送给 LLM 的完整提示词：
+
+```
+You are a professional waiter at a nice restaurant. Your goal is to help the customer practice English through natural conversation. Engage them with questions about their dining preferences, past restaurant experiences, or favorite cuisines. Ask follow-up questions to keep them talking. Make the conversation feel natural and enjoyable.
+
+【重要规则】
+- Your response MUST be exactly 2-3 sentences. Do not exceed this limit.
+- Use moderate vocabulary and natural expressions.
+- Do NOT use any emojis, icons, or special symbols. Only use plain English text.
+
+【引导对话规则】
+- ALWAYS end your response with an open-ended follow-up question to encourage the learner to speak more.
+- Ask about their opinions, experiences, preferences, or details related to the topic.
+- If they give a short answer, gently encourage elaboration (e.g., "That's interesting! Can you tell me more about that?").
+- Keep the conversation flowing naturally by showing genuine interest in what they say.
+- Occasionally share brief relevant experiences to build rapport, then ask about theirs.
+
+【生词使用】
+- VOCABULARY WORDS TO USE: determine, brilliant
+- You MUST use at least 1 of these vocabulary words within every 2-3 turns of conversation.
+- Try to use 1 vocabulary word in your current response if you haven't used one recently.
+- Use the words naturally in context, do not force them awkwardly.
+```
+
+### 12.9 实现代码位置
+
+| 功能 | 文件路径 |
+|------|----------|
+| 对话生成逻辑 | `server/src/lib/speak-llm.ts` |
+| 场景配置数据 | `server/src/app/api/speak/scenarios/route.ts` |
+| 开场白生成 | `server/src/app/api/speak/conversations/route.ts` |
+
+### 12.10 提示词迭代记录
+
+| 日期 | 版本 | 变更内容 |
 |------|------|----------|
-| 自由对话 | 用户自由说，AI 自由回复 | 日常口语练习 |
-| 场景对话 | 指定场景（点餐、问路等） | 特定场景练习 |
-| 单词对话 | 围绕选定单词展开对话 | 单词复习 |
-
-#### 识别容错机制
-
-- `confidence >= 0.7`：直接发送给 AI
-- `confidence < 0.7`：显示猜测结果，用户确认或重说
-
-#### 待讨论事项
-
-- [ ] 口语练习入口位置（独立页面 vs 生词本内）
-- [ ] 对话历史保存与回放
-- [ ] 是否需要评分/纠错功能
-- [ ] 移动端兼容性（Safari/Firefox 支持有限）
-- [ ] 语音识别语言检测（纯英语 vs 中英混合）
+| 2026-03-18 | v1.0 | 初始版本，基础对话功能 |
+| 2026-03-19 | v1.1 | 新增「引导对话规则」，要求 AI 每次回复以开放式问题结尾 |
+| 2026-03-19 | v1.2 | 新增「goodExpressions」正向反馈字段 |
+| 2026-03-19 | v1.3 | 优化所有场景的开场白，改为开放式问题形式 |
+| 2026-03-19 | v1.4 | 生词使用规则优化：从「每次必须使用」改为「2-3轮内至少使用1个」 |

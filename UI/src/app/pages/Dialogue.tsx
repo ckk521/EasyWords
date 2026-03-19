@@ -48,6 +48,7 @@ export function Dialogue() {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const audioCache = useRef<Map<string, string>>(new Map());
   const playingRef = useRef(false);
+  const preloadingRef = useRef<Promise<string | null> | null>(null); // 预加载的音频 Promise
 
   // 长按查词
   const [lookupWord, setLookupWord] = useState<string | null>(null);
@@ -68,6 +69,19 @@ export function Dialogue() {
 
     return () => stopPlayback();
   }, []);
+
+  // 页面加载完成后预加载前两句音频
+  useEffect(() => {
+    if (data && data.dialogue.length > 0) {
+      // 预加载第一句
+      getAudioUrl(0).catch(() => {});
+      // 预加载第二句（如果有）
+      if (data.dialogue.length > 1) {
+        getAudioUrl(1).catch(() => {});
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data, accent]);
 
   const loadDialogue = async () => {
     setLoading(true);
@@ -112,6 +126,7 @@ export function Dialogue() {
 
   const stopPlayback = () => {
     playingRef.current = false;
+    preloadingRef.current = null; // 清除预加载
     if (audioRef.current) {
       audioRef.current.pause();
       audioRef.current = null;
@@ -159,22 +174,42 @@ export function Dialogue() {
   // 播放指定行
   const playLine = async (index: number) => {
     if (!data || index >= data.dialogue.length || !playingRef.current) {
+      setLoadingAudio(false);
       stopPlayback();
       if (data && index >= data.dialogue.length) setCurrentLineIndex(0);
       return;
     }
 
     setCurrentLineIndex(index);
-    setLoadingAudio(true);
 
     try {
+      // 检查缓存中是否已有当前句
+      const currentKey = `${index}-${accent}-${data.dialogue[index].speaker}`;
+      const hasCache = audioCache.current.has(currentKey);
+
+      // 如果没有缓存，显示加载状态
+      if (!hasCache) {
+        setLoadingAudio(true);
+      }
+
+      // 获取当前句的音频（如果有缓存会直接返回）
       const url = await getAudioUrl(index);
+      setLoadingAudio(false);
+
       if (!url || !playingRef.current) {
         stopPlayback();
         return;
       }
 
-      setLoadingAudio(false);
+      // 检查缓存中是否已有下一句，没有则预加载
+      if (index < data.dialogue.length - 1) {
+        const nextKey = `${index + 1}-${accent}-${data.dialogue[index + 1].speaker}`;
+        if (!audioCache.current.has(nextKey)) {
+          // 后台预加载下一句，不阻塞当前播放
+          getAudioUrl(index + 1).catch(() => {});
+        }
+      }
+
       const audio = new Audio(url);
       audioRef.current = audio;
 
@@ -182,12 +217,14 @@ export function Dialogue() {
         if (playingRef.current && index < data.dialogue.length - 1) {
           playLine(index + 1);
         } else {
+          setLoadingAudio(false);
           stopPlayback();
           if (index >= data.dialogue.length - 1) setCurrentLineIndex(0);
         }
       };
 
       audio.onerror = () => {
+        setLoadingAudio(false);
         toast.error('音频播放失败');
         stopPlayback();
       };
@@ -200,7 +237,7 @@ export function Dialogue() {
     }
   };
 
-  const togglePlay = () => {
+  const togglePlay = async () => {
     if (!data) return;
     if (playing) {
       stopPlayback();
@@ -211,12 +248,61 @@ export function Dialogue() {
     }
   };
 
-  const handleReplay = () => {
+  const handleReplay = async () => {
     stopPlayback();
     setCurrentLineIndex(0);
     playingRef.current = true;
     setPlaying(true);
     playLine(0);
+  };
+
+  // 播放单行（点击喇叭icon）
+  const playSingleLine = async (index: number) => {
+    if (!data || loadingAudio) return;
+
+    // 停止当前播放
+    stopPlayback();
+
+    playingRef.current = true;
+    setPlaying(true);
+    setCurrentLineIndex(index);
+
+    // 检查缓存中是否已有
+    const currentKey = `${index}-${accent}-${data.dialogue[index].speaker}`;
+    const hasCache = audioCache.current.has(currentKey);
+
+    if (!hasCache) {
+      setLoadingAudio(true);
+    }
+
+    try {
+      const url = await getAudioUrl(index);
+      setLoadingAudio(false);
+
+      if (!url) {
+        stopPlayback();
+        return;
+      }
+
+      const audio = new Audio(url);
+      audioRef.current = audio;
+
+      audio.onended = () => {
+        stopPlayback();
+      };
+
+      audio.onerror = () => {
+        setLoadingAudio(false);
+        toast.error('音频播放失败');
+        stopPlayback();
+      };
+
+      await audio.play();
+    } catch (error: any) {
+      setLoadingAudio(false);
+      toast.error(error.message || '生成音频失败');
+      stopPlayback();
+    }
   };
 
   // 长按查词
@@ -299,14 +385,23 @@ export function Dialogue() {
   };
 
   const renderHighlightedText = (text: string) => {
+    // 创建生词集合（小写，用于匹配）
+    const wordSet = new Set(data?.words.map(w => w.toLowerCase()) || []);
+
     const parts = text.split(/(\*\*[^*]+\*\*)/g);
     return parts.map((part, i) => {
       if (part.startsWith('**') && part.endsWith('**')) {
-        return (
-          <span key={i} className="text-blue-600 font-semibold bg-blue-50 px-1 rounded">
-            {part.slice(2, -2)}
-          </span>
-        );
+        const word = part.slice(2, -2);
+        // 只有在生词列表中的才高亮显示
+        if (wordSet.has(word.toLowerCase())) {
+          return (
+            <span key={i} className="text-blue-600 font-semibold bg-blue-50 px-1 rounded">
+              {word}
+            </span>
+          );
+        }
+        // 不在生词列表中的，移除星号但不高亮
+        return <span key={i}>{word}</span>;
       }
       return <span key={i}>{part}</span>;
     });
@@ -375,6 +470,17 @@ export function Dialogue() {
               <div className="flex-1">
                 <p className="text-gray-800 leading-relaxed">{renderHighlightedText(line.text)}</p>
               </div>
+              <button
+                onClick={() => playSingleLine(i)}
+                className={`flex-shrink-0 p-2 rounded-full transition-colors ${
+                  i === currentLineIndex && playing
+                    ? 'bg-blue-500 text-white'
+                    : 'bg-gray-200 text-gray-600 hover:bg-gray-300'
+                }`}
+                title="播放此句"
+              >
+                <Volume2 className="size-4" />
+              </button>
             </div>
           </div>
         ))}

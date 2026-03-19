@@ -32,8 +32,12 @@ Thumbs.db
 *.log
 npm-debug.log*
 
+# TypeScript build cache
+*.tsbuildinfo
+
 # Claude
 .claude/
+.mcp.json
 
 # Vercel
 .vercel/

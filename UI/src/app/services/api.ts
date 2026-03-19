@@ -112,6 +112,7 @@ export const api = {
 
       const decoder = new TextDecoder();
       let buffer = '';
+      let completed = false;
 
       while (true) {
         const { done, value } = await reader.read();
@@ -135,6 +136,7 @@ export const api = {
                   callbacks.onChunk?.(parsed.content);
                   break;
                 case 'complete':
+                  completed = true;
                   callbacks.onComplete?.({
                     id: `temp-${Date.now()}`,
                     word: word.toLowerCase(),
@@ -154,6 +156,34 @@ export const api = {
             }
           }
         }
+      }
+
+      // 处理剩余的 buffer（可能包含 complete 事件）
+      if (buffer.trim().startsWith('data: ')) {
+        const data = buffer.trim().slice(6);
+        try {
+          const parsed = JSON.parse(data);
+          if (parsed.type === 'complete' && !completed) {
+            callbacks.onComplete?.({
+              id: `temp-${Date.now()}`,
+              word: word.toLowerCase(),
+              ...parsed.data,
+              createdAt: new Date().toISOString(),
+              lastReviewedAt: null,
+              reviewCount: 0,
+              isSaved: false,
+            });
+          } else if (parsed.type === 'error') {
+            callbacks.onError?.(parsed.message);
+          }
+        } catch {
+          // 忽略解析错误
+        }
+      }
+
+      // 如果流结束但没有收到 complete 或 error 事件，报告错误
+      if (!completed) {
+        callbacks.onError?.('响应不完整，请重试');
       }
     } catch (error) {
       callbacks.onError?.(error instanceof Error ? error.message : '网络错误');

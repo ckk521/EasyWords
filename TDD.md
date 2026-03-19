@@ -1,7 +1,7 @@
 # EasyWords - 技术设计文档 (TDD)
 
-> 版本：MVP v1.0
-> 更新日期：2026-03-15
+> 版本：V3.0
+> 更新日期：2026-03-18
 > 关联文档：PRD.md
 
 ---
@@ -1641,3 +1641,681 @@ const { text } = await generateText({
 2. 注册/登录账号
 3. 进入控制台 → API 密钥
 4. 创建新密钥
+
+---
+
+## 十四、V3.0 AI 口语陪练模块
+
+> 来源：SpeakV2 模块整合
+> 更新日期：2026-03-18
+
+### 14.1 技术架构
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                              客户端层 (Client Layer)                         │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│   ┌─────────────┐   ┌─────────────┐                                       │
+│   │   H5 App    │   │   Web App   │                                       │
+│   │  (React 18) │   │  (React 18) │                                       │
+│   └──────┬──────┘   └──────┬──────┘                                       │
+│          │                 │                                               │
+│   ┌──────┴─────────────────┴──────┐                                       │
+│   │        音频处理模块            │                                       │
+│   │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐                 │
+│   │  │ 录音管理  │ │ VAD检测  │ │ 音频播放  │ │ 音频编解码│                 │
+│   │  └──────────┘ └──────────┘ └──────────┘ └──────────┘                 │
+│   └─────────────────────────────────────────┘                             │
+│                                                                             │
+└──────────────────────────────────┬──────────────────────────────────────────┘
+                                   │
+                                   │ HTTPS / WSS
+                                   ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                              API 网关层                                      │
+├─────────────────────────────────────────────────────────────────────────────┤
+│   ┌─────────────────────────────────────────────────────────────────────┐  │
+│   │                     Next.js API Routes + WebSocket                  │  │
+│   └─────────────────────────────────────────────────────────────────────┘  │
+└──────────────────────────────────┬──────────────────────────────────────────┘
+                                   │
+                                   ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                              AI 服务层                                       │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│   ┌─────────────┐   ┌─────────────┐   ┌─────────────┐                     │
+│   │ Web Speech  │   │ GLM-4-FLASH │   │  Edge TTS   │                     │
+│   │ API (ASR)   │   │   (LLM)     │   │   (TTS)     │                     │
+│   │   免费      │   │   极低成本  │   │    免费     │                     │
+│   └─────────────┘   └─────────────┘   └─────────────┘                     │
+│                                                                             │
+│   ┌─────────────┐                                                         │
+│   │ 通义听悟    │  ← 备选 ASR（浏览器不支持时降级）                        │
+│   │ (备选ASR)   │                                                         │
+│   └─────────────┘                                                         │
+│                                                                             │
+└──────────────────────────────────┬──────────────────────────────────────────┘
+                                   │
+                                   ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                              数据存储层                                      │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│   ┌─────────────┐   ┌─────────────┐   ┌─────────────┐                     │
+│   │   SQLite    │   │   Redis     │   │   音频文件   │                     │
+│   │  (已有)     │   │ (会话缓存)  │   │  (不存储)   │                     │
+│   └─────────────┘   └─────────────┘   └─────────────┘                     │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### 14.2 技术选型
+
+| 模块 | 技术选型 | 选型理由 | 成本 |
+|------|----------|----------|------|
+| **ASR 语音识别** | Web Speech API（主） | 浏览器原生，Chrome/Edge 支持好 | 免费 |
+| **ASR 语音识别** | 通义听悟（备选） | 浏览器不支持时降级 | ¥0.006/15秒 |
+| **LLM 对话** | GLM-4-FLASH | 响应极快，成本极低 | ¥0.0001/千tokens |
+| **TTS 语音合成** | Edge TTS（服务端） | 完全免费，质量好，多音色 | 免费 |
+| **VAD 检测** | WebRTC VAD（前端） | 前端实时检测，延迟 < 50ms | 免费 |
+| **实时通信** | WebSocket (ws) | 轻量级、高性能 | - |
+
+### 14.3 数据模型扩展
+
+```prisma
+// prisma/schema.prisma 新增
+
+// 对话场景表
+model Scenario {
+  id                String   @id @default(uuid())
+  name              String   @unique      // 场景名称
+  description       String                // 场景描述
+  icon              String?               // 图标
+  difficultyLevels  String   @default("beginner,intermediate,advanced") // JSON 数组
+  systemPrompts     String                // JSON 对象，按难度分
+  openingLines      String                // JSON 对象，按难度分
+  learningGoals     String?               // JSON 数组
+  sortOrder         Int      @default(0)
+  isActive          Boolean  @default(true)
+  createdAt         DateTime @default(now())
+
+  @@index([sortOrder])
+}
+
+// 口语对话记录表
+model Conversation {
+  id            String    @id @default(uuid())
+  userId        String?   // 可选用户关联
+  scenarioId    String
+  difficulty    String    // beginner, intermediate, advanced
+  mode          String    // press-to-talk, free-talk
+
+  // 关联的生词ID列表
+  wordIds       String?   // JSON: string[]
+
+  // 使用 JSON 存储消息和反馈
+  messages      String    @default("[]")  // JSON 数组
+  feedback      String?   // JSON 对象
+
+  duration      Int?      // 对话时长（秒）
+  startedAt     DateTime  @default(now())
+  endedAt       DateTime?
+
+  @@index([startedAt])
+  @@index([scenarioId])
+}
+```
+
+### 14.4 API 设计
+
+#### 14.4.1 场景管理
+
+```typescript
+// GET /api/speak/scenarios - 获取场景列表
+// Response
+{
+  "success": true,
+  "data": {
+    "scenarios": [
+      {
+        "id": "restaurant",
+        "name": "餐厅点餐",
+        "description": "在餐厅与服务员对话，完成点餐",
+        "icon": "🍽️",
+        "difficultyLevels": ["beginner", "intermediate", "advanced"],
+        "learningGoals": ["餐饮词汇", "礼貌请求", "数量表达"]
+      }
+    ]
+  }
+}
+
+// GET /api/speak/scenarios/:id - 获取场景详情（含 systemPrompt）
+```
+
+#### 14.4.2 对话管理
+
+```typescript
+// POST /api/speak/conversations - 创建对话
+// Request
+{
+  "scenarioId": "restaurant",
+  "difficulty": "intermediate",
+  "mode": "press-to-talk",
+  "wordIds": ["uuid-1", "uuid-2"]  // 可选：关联的生词
+}
+
+// Response
+{
+  "success": true,
+  "data": {
+    "id": "conv-uuid",
+    "openingLine": "Good evening! Welcome to our restaurant. What would you like to order?",
+    "scenario": { ... },
+    "createdAt": "..."
+  }
+}
+
+// POST /api/speak/conversations/:id/message - 发送消息（按住说话模式）
+// Request
+{
+  "text": "I'd like to have a hamburger please."
+}
+
+// Response
+{
+  "success": true,
+  "data": {
+    "reply": "Great choice! Would you like fries with that?",
+    "audioUrl": "/api/speak/audio/xxx.mp3"  // TTS 音频
+  }
+}
+
+// POST /api/speak/conversations/:id/end - 结束对话并生成反馈
+// Response
+{
+  "success": true,
+  "data": {
+    "feedback": {
+      "grammarErrors": [...],
+      "betterExpressions": [...],
+      "summary": { ... }
+    }
+  }
+}
+
+// GET /api/speak/conversations - 获取历史记录
+// GET /api/speak/conversations/:id - 获取对话详情
+```
+
+#### 14.4.3 WebSocket 通信协议（自由对话模式）
+
+```typescript
+// 客户端 → 服务端
+{
+  "type": "join_session",
+  "sessionId": "conv-uuid",
+  "scenarioId": "restaurant",
+  "difficulty": "intermediate",
+  "wordIds": ["uuid-1", "uuid-2"]
+}
+
+{
+  "type": "audio_chunk",
+  "audio": "base64 encoded audio",
+  "sequence": 1,
+  "isFinal": false
+}
+
+{
+  "type": "interrupt"
+}
+
+// 服务端 → 客户端
+{
+  "type": "session_started",
+  "openingLine": "Good evening! Welcome..."
+}
+
+{
+  "type": "asr_result",
+  "text": "I'd like to have...",
+  "isFinal": false
+}
+
+{
+  "type": "llm_chunk",
+  "text": "Great choice!"
+}
+
+{
+  "type": "tts_chunk",
+  "audio": "base64 encoded audio",
+  "sequence": 1,
+  "isFinal": false
+}
+
+{
+  "type": "error",
+  "code": "ASR_FAILED",
+  "message": "语音识别失败"
+}
+```
+
+### 14.5 核心组件设计
+
+#### 14.5.1 前端音频管理器
+
+```typescript
+// lib/audio-manager.ts
+
+/**
+ * 音频录制管理器
+ */
+export class AudioRecorder {
+  private mediaStream: MediaStream | null = null;
+  private audioContext: AudioContext | null = null;
+  private vadProcessor: AudioWorkletNode | null = null;
+
+  private config = {
+    sampleRate: 16000,
+    channelCount: 1,
+    vadThreshold: 0.5,
+    silenceDuration: 1500,  // 静音 1.5s 视为说话结束
+  };
+
+  /**
+   * 初始化麦克风
+   */
+  async init(): Promise<void> {
+    this.mediaStream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        sampleRate: this.config.sampleRate,
+        channelCount: this.config.channelCount,
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
+      }
+    });
+
+    this.audioContext = new AudioContext({
+      sampleRate: this.config.sampleRate
+    });
+
+    // 加载 VAD Worklet
+    await this.audioContext.audioWorklet.addModule('/worklets/vad-processor.js');
+  }
+
+  /**
+   * 开始录音（按住说话模式）
+   */
+  startRecording(): void { ... }
+
+  /**
+   * 停止录音
+   */
+  stopRecording(): ArrayBuffer { ... }
+
+  /**
+   * 开启自由对话模式（VAD 自动检测）
+   */
+  startFreeTalk(callbacks: {
+    onVoiceStart: () => void;
+    onVoiceEnd: (audio: ArrayBuffer) => void;
+    onAudioChunk: (audio: ArrayBuffer) => void;
+  }): void { ... }
+}
+
+/**
+ * 音频播放管理器（支持流式播放）
+ */
+export class AudioPlayer {
+  private audioContext: AudioContext;
+  private audioQueue: AudioBuffer[] = [];
+  private isPlaying: boolean = false;
+  private currentSource: AudioBufferSourceNode | null = null;
+
+  /**
+   * 添加音频块到播放队列
+   */
+  async enqueueAudioChunk(audioData: ArrayBuffer): Promise<void> { ... }
+
+  /**
+   * 立即停止播放（用户打断）
+   */
+  stopImmediately(): void { ... }
+}
+```
+
+#### 14.5.2 语音识别服务（Web Speech API 封装）
+
+```typescript
+// lib/speech-recognition.ts
+
+/**
+ * Web Speech API 封装
+ * 支持浏览器原生语音识别，不支持的浏览器降级到服务端 ASR
+ */
+export class SpeechRecognitionService {
+  private recognition: SpeechRecognition | null = null;
+  private useServerASR: boolean = false;
+
+  constructor() {
+    // 检测浏览器支持
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (SpeechRecognition) {
+      this.recognition = new SpeechRecognition();
+      this.recognition.continuous = false;
+      this.recognition.interimResults = true;
+      this.recognition.lang = 'en-US';
+    } else {
+      this.useServerASR = true;
+    }
+  }
+
+  /**
+   * 识别音频
+   */
+  async recognize(audioBuffer: ArrayBuffer): Promise<{
+    text: string;
+    confidence: number;
+  }> {
+    if (this.useServerASR) {
+      // 降级到服务端 ASR
+      return this.serverRecognize(audioBuffer);
+    }
+
+    return new Promise((resolve, reject) => {
+      this.recognition!.onresult = (event) => {
+        const result = event.results[0];
+        resolve({
+          text: result[0].transcript,
+          confidence: result[0].confidence,
+        });
+      };
+      this.recognition!.onerror = (event) => {
+        // 如果失败，尝试服务端 ASR
+        this.serverRecognize(audioBuffer).then(resolve).catch(reject);
+      };
+      this.recognition!.start();
+    });
+  }
+
+  /**
+   * 服务端 ASR（通义听悟）
+   */
+  private async serverRecognize(audioBuffer: ArrayBuffer): Promise<{
+    text: string;
+    confidence: number;
+  }> {
+    const response = await fetch('/api/speak/asr', {
+      method: 'POST',
+      body: audioBuffer,
+    });
+    return response.json();
+  }
+}
+```
+
+### 14.6 后端服务实现
+
+#### 14.6.1 对话服务
+
+```typescript
+// services/speak/conversation.service.ts
+
+import { LLMService } from '@/services/llm.service';
+import { TTSService } from './tts.service';
+
+export class SpeakConversationService {
+  constructor(
+    private llmService: LLMService,
+    private ttsService: TTSService,
+  ) {}
+
+  /**
+   * 生成开场白
+   */
+  async generateOpeningLine(
+    scenario: Scenario,
+    difficulty: string,
+    wordIds?: string[]
+  ): Promise<string> {
+    const systemPrompt = JSON.parse(scenario.systemPrompts)[difficulty];
+    const openingLines = JSON.parse(scenario.openingLines)[difficulty];
+
+    // 如果有关联生词，在开场白中融入
+    if (wordIds && wordIds.length > 0) {
+      const words = await this.getWordTexts(wordIds);
+      const prompt = `${systemPrompt}\n\n请生成开场白，并在对话中自然融入以下生词：${words.join(', ')}`;
+
+      const result = await this.llmService.generateText(prompt, {
+        maxTokens: 100,
+        temperature: 0.8,
+      });
+      return result;
+    }
+
+    return openingLines;
+  }
+
+  /**
+   * 处理用户消息
+   */
+  async handleMessage(
+    conversationId: string,
+    userMessage: string,
+    systemPrompt: string
+  ): Promise<{ reply: string; audioBuffer: Buffer }> {
+    // 1. 获取对话历史
+    const history = await this.getConversationHistory(conversationId);
+
+    // 2. LLM 生成回复
+    const reply = await this.llmService.generateReply(
+      systemPrompt,
+      history,
+      userMessage
+    );
+
+    // 3. TTS 合成语音
+    const audioBuffer = await this.ttsService.synthesize(reply, {
+      voice: 'en-US-JennyNeural',
+    });
+
+    // 4. 保存消息
+    await this.saveMessage(conversationId, {
+      role: 'user',
+      content: userMessage,
+    });
+    await this.saveMessage(conversationId, {
+      role: 'assistant',
+      content: reply,
+    });
+
+    return { reply, audioBuffer };
+  }
+
+  /**
+   * 生成学习反馈
+   */
+  async generateFeedback(conversationId: string): Promise<Feedback> {
+    const messages = await this.getConversationHistory(conversationId);
+    const userMessages = messages.filter(m => m.role === 'user');
+
+    const feedback = await this.llmService.generateFeedback(userMessages);
+
+    // 保存反馈
+    await this.saveFeedback(conversationId, feedback);
+
+    return feedback;
+  }
+}
+```
+
+#### 14.6.2 TTS 服务（Edge TTS）
+
+```typescript
+// services/speak/tts.service.ts
+
+import { exec } from 'child_process';
+import { promisify } from 'util';
+import fs from 'fs/promises';
+import path from 'path';
+
+const execAsync = promisify(exec);
+
+export class TTSService {
+  private voices = {
+    'female-us': 'en-US-JennyNeural',
+    'male-us': 'en-US-GuyNeural',
+    'female-uk': 'en-GB-SoniaNeural',
+    'female-au': 'en-AU-NatashaNeural',
+  };
+
+  /**
+   * 合成语音
+   */
+  async synthesize(
+    text: string,
+    options: { voice?: string } = {}
+  ): Promise<Buffer> {
+    const voice = this.voices[options.voice || 'female-us'] || 'en-US-JennyNeural';
+    const tempFile = path.join('/tmp', `tts_${Date.now()}.mp3`);
+
+    try {
+      // 使用 edge-tts 命令行工具
+      await execAsync(
+        `edge-tts --voice "${voice}" --text "${text}" --write-media "${tempFile}"`
+      );
+
+      const audioData = await fs.readFile(tempFile);
+      await fs.unlink(tempFile).catch(() => {});
+
+      return audioData;
+    } catch (error) {
+      console.error('TTS Error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * 流式合成（用于 WebSocket）
+   */
+  async *synthesizeStream(text: string, options = {}): AsyncGenerator<Buffer> {
+    // 实现流式合成
+    const fullAudio = await this.synthesize(text, options);
+
+    // 分块返回
+    const chunkSize = 4096;
+    for (let i = 0; i < fullAudio.length; i += chunkSize) {
+      yield fullAudio.slice(i, i + chunkSize);
+    }
+  }
+}
+```
+
+### 14.7 前端页面结构
+
+```
+app/
+├── speak/                          # 口语陪练模块
+│   ├── page.tsx                    # 场景选择页
+│   ├── conversation/
+│   │   └── page.tsx                # 对话界面
+│   └── history/
+│       └── page.tsx                # 历史记录页
+│
+├── api/speak/
+│   ├── scenarios/
+│   │   └── route.ts                # 场景列表
+│   ├── conversations/
+│   │   ├── route.ts                # 创建/列表
+│   │   ├── [id]/
+│   │   │   └── route.ts            # 详情/删除
+│   │   ├── [id]/message/
+│   │   │   └── route.ts            # 发送消息
+│   │   └── [id]/end/
+│   │       └── route.ts            # 结束对话
+│   ├── asr/
+│   │   └── route.ts                # ASR 服务（降级用）
+│   └── ws/
+│       └── route.ts                # WebSocket 入口
+│
+components/speak/
+├── scenario-card.tsx               # 场景卡片
+├── difficulty-selector.tsx         # 难度选择器
+├── chat-message.tsx                # 对话消息
+├── chat-input.tsx                  # 底部输入区（按住说话/自由对话）
+├── audio-player.tsx                # 音频播放器
+├── feedback-report.tsx             # 反馈报告
+└── word-selector.tsx               # 生词选择器
+```
+
+### 14.8 场景数据初始化
+
+```typescript
+// prisma/seed.ts
+
+const scenarios = [
+  {
+    id: 'restaurant',
+    name: '餐厅点餐',
+    description: '在餐厅与服务员对话，完成点餐',
+    icon: '🍽️',
+    difficultyLevels: ['beginner', 'intermediate', 'advanced'],
+    systemPrompts: JSON.stringify({
+      beginner: 'You are a friendly waiter at a casual restaurant. Use simple sentences and speak slowly. Help the customer order food.',
+      intermediate: 'You are a professional waiter at a nice restaurant. Engage in natural conversation about menu recommendations.',
+      advanced: 'You are an experienced sommelier and waiter at an upscale restaurant. Use sophisticated vocabulary and discuss food pairings.',
+    }),
+    openingLines: JSON.stringify({
+      beginner: 'Hello! Welcome to our restaurant. What would you like to order today?',
+      intermediate: 'Good evening! Welcome. May I start you off with something to drink while you look at the menu?',
+      advanced: 'Good evening, and welcome. Tonight we have some exceptional specials I\'d be delighted to tell you about.',
+    }),
+    learningGoals: ['餐饮词汇', '礼貌请求', '数量表达'],
+  },
+  // ... 其他场景
+];
+```
+
+### 14.9 成本控制策略
+
+```typescript
+// 成本控制中间件
+
+export async function costControlMiddleware(req, res, next) {
+  const session = req.session;
+
+  // 1. 检查每日对话次数限制
+  const dailyCount = await getDailyConversationCount(session.userId);
+  if (dailyCount >= 50) {  // 免费用户每日 50 次
+    return res.status(429).json({
+      error: 'DAILY_LIMIT_EXCEEDED',
+      message: '今日对话次数已达上限',
+    });
+  }
+
+  // 2. ASR 成本控制：优先使用 Web Speech API
+  // 只有当浏览器不支持时才使用服务端 ASR
+
+  // 3. 对话长度限制
+  // 限制每次对话最多 20 轮，避免 token 消耗过大
+
+  next();
+}
+```
+
+### 14.10 开发排期
+
+| 阶段 | 内容 | 预计时间 |
+|------|------|----------|
+| Phase 1 | 数据库扩展 + 场景管理 API | 2 天 |
+| Phase 2 | 前端音频模块（录音、VAD、播放） | 3 天 |
+| Phase 3 | 对话服务（按住说话模式） | 3 天 |
+| Phase 4 | 自由对话模式（WebSocket） | 3 天 |
+| Phase 5 | 生词关联 + 学习反馈 | 2 天 |
+| Phase 6 | 测试与优化 | 2 天 |
+
+**总计：约 15 天**

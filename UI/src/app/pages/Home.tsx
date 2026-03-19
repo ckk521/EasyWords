@@ -124,35 +124,55 @@ export function Home() {
           });
         },
         onComplete: async (result) => {
-          // 合并数据，保留 antonyms（来自词典API）和其他 LLM 补充的数据
-          setWord(prev => {
-            const finalResult = {
-              ...prev,
-              ...result,
-              sentences: result.sentences || prev?.sentences || [],
-              synonyms: result.synonyms || [],
-              antonyms: prev?.antonyms || result.antonyms || [],  // 保留词典API的反义词
-            };
+          // 合并数据，保留已有数据（避免空数组覆盖已显示的内容）
+          const finalResult = {
+            ...result,
+            sentences: result.sentences?.length ? result.sentences : undefined,
+            synonyms: result.synonyms?.length ? result.synonyms : undefined,
+            antonyms: result.antonyms?.length ? result.antonyms : undefined,
+          };
 
-            // 自动保存到生词本（静默）
-            api.addWord({
-              word: finalResult.word,
-              phoneticUs: finalResult.phoneticUs,
-              phoneticUk: finalResult.phoneticUk,
-              chineseDefinition: finalResult.chineseDefinition,
-              englishDefinition: finalResult.englishDefinition,
-              partOfSpeech: finalResult.partOfSpeech,
-              audioUs: finalResult.audioUs,
-              audioUk: finalResult.audioUk,
-              antonyms: finalResult.antonyms,
-              sentences: finalResult.sentences,
-              synonyms: finalResult.synonyms,
-            }).catch(() => {
-              // 静默处理（已存在或其他错误）
-            });
+          // 检查单词是否已存在
+          let isSaved = false;
+          try {
+            const existing = await api.getWords({ search: finalResult.word, limit: 1 });
+            if (existing.words.length > 0 && existing.words[0].word === finalResult.word.toLowerCase()) {
+              // 单词已存在，标记为已保存，不重复添加
+              isSaved = true;
+            }
+          } catch {
+            // 查询失败，继续尝试保存
+          }
 
-            return finalResult;
-          });
+          // 单词不存在，保存到生词本
+          if (!isSaved) {
+            try {
+              await api.addWord({
+                word: finalResult.word,
+                phoneticUs: finalResult.phoneticUs,
+                phoneticUk: finalResult.phoneticUk,
+                chineseDefinition: finalResult.chineseDefinition,
+                englishDefinition: finalResult.englishDefinition,
+                partOfSpeech: finalResult.partOfSpeech,
+                audioUs: finalResult.audioUs,
+                audioUk: finalResult.audioUk,
+                antonyms: finalResult.antonyms,
+                sentences: finalResult.sentences,
+                synonyms: finalResult.synonyms,
+              });
+            } catch {
+              // 保存失败，静默处理
+            }
+          }
+
+          setWord(prev => ({
+            ...prev,
+            ...finalResult,
+            // 保留已有的数据，不覆盖
+            sentences: finalResult.sentences || prev?.sentences || [],
+            synonyms: finalResult.synonyms || prev?.synonyms || [],
+            isSaved,
+          }));
           setLoading(false);
           streamingBuffer.current = '';
         },

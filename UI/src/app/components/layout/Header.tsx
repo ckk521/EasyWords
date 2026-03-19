@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'react-router';
-import { BookOpen, Library, FileText, Settings, Newspaper, Headphones } from 'lucide-react';
+import { BookOpen, Library, FileText, Settings, Newspaper, Headphones, Mic } from 'lucide-react';
 
 export function Header() {
   const location = useLocation();
@@ -9,6 +9,7 @@ export function Header() {
     { path: '/vocabulary', label: '生词本', icon: Library },
     { path: '/articles', label: '生词阅读', icon: Newspaper },
     { path: '/dialogues', label: '生词会话', icon: Headphones },
+    { path: '/speak', label: '口语陪练', icon: Mic },
     { path: '/settings', label: '设置', icon: Settings }
   ];
 
@@ -18,6 +19,9 @@ export function Header() {
     }
     if (path === '/dialogues') {
       return location.pathname === '/dialogues' || location.pathname === '/dialogue';
+    }
+    if (path === '/speak') {
+      return location.pathname.startsWith('/speak');
     }
     return location.pathname === path;
   };

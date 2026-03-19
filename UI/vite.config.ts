@@ -33,7 +33,7 @@ export default defineConfig({
       // 本地开发时，将 /api 请求代理到后端
       // 生产环境：前后端同域部署，不需要代理
       '/api': {
-        target: 'http://localhost:3000',
+        target: 'http://localhost:3001',
         changeOrigin: true,
       },
     },

@@ -71,3 +71,50 @@ model Dialogue {
 
   @@map("dialogues")
 }
+
+// ============================================
+// V3.0 AI 口语陪练模块
+// ============================================
+
+// 口语练习场景表
+model SpeakScenario {
+  id               String   @id @default(uuid())
+  name             String   @unique    // 场景名称（如：餐厅点餐）
+  description      String              // 场景描述
+  icon             String?             // 图标 emoji
+  difficultyLevels String   @default("beginner,intermediate,advanced") // 可用难度等级
+  systemPrompts    String              // JSON: { beginner: "...", intermediate: "...", advanced: "..." }
+  openingLines     String              // JSON: { beginner: "...", intermediate: "...", advanced: "..." }
+  learningGoals    String?             // JSON 数组: ["餐饮词汇", "礼貌请求"]
+  sortOrder        Int      @default(0)
+  isActive         Boolean  @default(true)
+  createdAt        DateTime @default(now())
+
+  @@index([sortOrder])
+  @@map("speak_scenarios")
+}
+
+// 口语对话记录表
+model SpeakConversation {
+  id          String    @id @default(uuid())
+  scenarioId  String              // 场景ID
+  difficulty  String              // beginner | intermediate | advanced
+  mode        String              // press-to-talk | free-talk
+
+  // 关联的生词ID列表
+  wordIds     String?   @default("[]")   // JSON: string[]
+
+  // 对话消息记录
+  messages    String    @default("[]")   // JSON: Message[]
+
+  // 学习反馈（对话结束后生成）
+  feedback    String?              // JSON: Feedback
+
+  // 对话统计
+  duration    Int?                 // 对话时长（秒）
+  startedAt   DateTime  @default(now())
+  endedAt     DateTime?
+
+  @@index([startedAt])
+  @@map("speak_conversations")
+}

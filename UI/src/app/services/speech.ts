@@ -16,6 +16,49 @@ interface TTSOptions {
 let currentAudio: HTMLAudioElement | null = null;
 let currentAudioUrl: string | null = null;
 
+// Safari 自动播放解锁状态
+let audioUnlocked = false;
+let audioContext: AudioContext | null = null;
+
+/**
+ * 检查音频是否已解锁（Safari 需要用户交互才能播放音频）
+ */
+export function isAudioUnlocked(): boolean {
+  return audioUnlocked;
+}
+
+/**
+ * 解锁音频播放（在用户交互时调用）
+ * Safari 需要在用户交互后才能播放音频
+ */
+export function unlockAudio(): void {
+  if (audioUnlocked) return;
+
+  // 创建并立即恢复 AudioContext
+  try {
+    audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+    if (audioContext.state === 'suspended') {
+      audioContext.resume().then(() => {
+        console.log('[TTS] AudioContext 已解锁');
+        audioUnlocked = true;
+      });
+    } else {
+      audioUnlocked = true;
+    }
+  } catch (e) {
+    console.warn('[TTS] 创建 AudioContext 失败:', e);
+  }
+
+  // 播放一个静音音频来解锁
+  const silentAudio = new Audio('data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4Ljc2LjEwMAAAAAAAAAAAAAAA//tQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAABhgC7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7//////////////////////////////////////////////////////////////////8AAAAATGF2YzU4LjEzAAAAAAAAAAAAAAAAJAAAAAAAAAAAAYYNAAAAAAAAAAAAAAAAAAAA//tQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAABhgC7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7//////////////////////////////////////////////////////////////////8AAAAATGF2YzU4LjEzAAAAAAAAAAAAAAAAJAAAAAAAAAAAAYYNAAAAAAAAAAAAAAAAAAAA');
+  silentAudio.play().then(() => {
+    console.log('[TTS] 静音音频播放成功，音频已解锁');
+    audioUnlocked = true;
+  }).catch((e) => {
+    console.warn('[TTS] 静音音频播放失败:', e);
+  });
+}
+
 /**
  * 移除文本中的 emoji 和特殊符号（TTS 不需要读这些）
  */
@@ -54,15 +97,15 @@ export async function speakText(options: TTSOptions): Promise<void> {
   if (!cleanText.trim()) return;
 
   try {
-    // 使用浏览器原生 TTS
+    // 优先使用服务端 TTS（更稳定，有英语语音）
+    // 浏览器原生 TTS 可能没有安装英语语音包
+    return await speakWithServerTTS(cleanText, lang, speaker, speed);
+  } catch (error) {
+    console.error('服务端 TTS 失败，尝试浏览器 TTS:', error);
+    // 服务端失败时，降级到浏览器原生 TTS
     if ('speechSynthesis' in window) {
       return await speakWithWebSpeech(cleanText, lang, speaker, speed);
     }
-
-    // 降级到服务端 TTS
-    return await speakWithServerTTS(cleanText, lang, speaker, speed);
-  } catch (error) {
-    console.error('TTS 播放失败:', error);
   }
 }
 
@@ -349,11 +392,14 @@ export function createSpeechRecognizer(
   recognition.interimResults = options.interimResults ?? true;
   recognition.maxAlternatives = options.maxAlternatives ?? 1;
 
+  console.log('[ASR] 创建识别器, lang:', recognition.lang, 'continuous:', recognition.continuous);
+
   recognition.onresult = (event: SpeechRecognitionEvent) => {
     interimTranscript = '';
 
     for (let i = event.resultIndex; i < event.results.length; i++) {
       const result = event.results[i];
+      console.log('[ASR] 结果:', i, 'isFinal:', result.isFinal, 'text:', result[0].transcript);
       if (result.isFinal) {
         finalTranscript += result[0].transcript + ' ';
       } else {
@@ -362,6 +408,7 @@ export function createSpeechRecognizer(
     }
 
     const fullTranscript = (finalTranscript + interimTranscript).trim();
+    console.log('[ASR] 当前完整文本:', fullTranscript);
 
     onResult({
       transcript: fullTranscript,
@@ -375,20 +422,20 @@ export function createSpeechRecognizer(
     const errorType = errorEvent.error || 'unknown';
     let errorMessage = '语音识别失败';
 
-    console.log('[ASR] 识别错误类型:', errorType);
+    console.log('[ASR] 识别错误类型:', errorType, 'message:', errorEvent.message);
 
     switch (errorType) {
       case 'not-allowed':
         errorMessage = '麦克风权限被拒绝，请在浏览器设置中允许访问麦克风';
         break;
       case 'no-speech':
-        errorMessage = '未检测到语音，请重试';
+        errorMessage = '未检测到语音，请对准麦克风说话后重试';
         break;
       case 'audio-capture':
-        errorMessage = '无法捕获音频，请检查麦克风';
+        errorMessage = '无法捕获音频，请检查麦克风是否正常工作';
         break;
       case 'network':
-        errorMessage = '网络错误，请检查网络连接';
+        errorMessage = '网络错误，语音识别需要连接 Google 服务器，请检查网络或使用 VPN';
         break;
       case 'aborted':
         errorMessage = '识别被中断';
@@ -396,8 +443,16 @@ export function createSpeechRecognizer(
       case 'language-not-supported':
         errorMessage = '不支持的语言';
         break;
+      case 'service-not-allowed':
+        errorMessage = '语音识别服务不可用，请确保使用 HTTPS 或 localhost';
+        break;
       default:
-        errorMessage = `语音识别失败: ${errorType}`;
+        // 其他未知错误，可能是网络问题
+        if (errorType !== 'no-speech' && errorType !== 'aborted') {
+          errorMessage = `语音识别失败: ${errorType}。如果在国内使用，可能需要 VPN 访问 Google 服务器`;
+        } else {
+          errorMessage = `语音识别失败: ${errorType}`;
+        }
     }
 
     listening = false;
@@ -412,17 +467,20 @@ export function createSpeechRecognizer(
   };
 
   recognition.onend = () => {
+    console.log('[ASR] 识别结束, listening:', listening, 'resolveStop:', !!resolveStop);
     listening = false;
 
     // 当识别结束时，返回最终文本
     if (resolveStop) {
       const finalText = (finalTranscript + interimTranscript).trim();
+      console.log('[ASR] 返回最终文本:', finalText);
       resolveStop(finalText);
       resolveStop = null;
     }
   };
 
   recognition.onstart = () => {
+    console.log('[ASR] 识别已开始');
     listening = true;
     finalTranscript = '';
     interimTranscript = '';
@@ -433,19 +491,31 @@ export function createSpeechRecognizer(
       if (!listening) {
         finalTranscript = '';
         interimTranscript = '';
-        recognition.start();
+        console.log('[ASR] 调用 start()');
+        try {
+          recognition.start();
+        } catch (e: any) {
+          console.error('[ASR] start() 出错:', e);
+          onError('启动语音识别失败: ' + (e.message || e));
+        }
       }
     },
     stop: () => {
       return new Promise((resolve) => {
         resolveStop = resolve;
-        recognition.stop();
+        console.log('[ASR] 调用 stop(), 当前文本:', finalTranscript, interimTranscript);
+        try {
+          recognition.stop();
+        } catch (e) {
+          console.error('[ASR] stop() 出错:', e);
+        }
         listening = false;
 
         // 超时保护：如果 1 秒内没有 onend 回调，也返回当前结果
         setTimeout(() => {
           if (resolveStop) {
             const finalText = (finalTranscript + interimTranscript).trim();
+            console.log('[ASR] 超时，返回当前文本:', finalText);
             resolve(finalText);
             resolveStop = null;
           }

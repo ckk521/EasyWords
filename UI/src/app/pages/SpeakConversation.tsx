@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
 import { Button } from '../components/ui/button';
 import { speakApi } from '../services/speakApi';
-import { speakText, stopSpeaking, createSpeechRecognizer, isSpeechRecognitionSupported } from '../services/speech';
+import { speakText, stopSpeaking, createSpeechRecognizer, isSpeechRecognitionSupported, unlockAudio, isAudioUnlocked } from '../services/speech';
 import { SpeakConversation as SpeakConversationType, SpeakMessage, Feedback, ConversationState, RecordingState, GrammarError, BetterExpression, GoodExpression } from '../types/speak';
 import {
   Loader2,
@@ -109,18 +109,23 @@ export function SpeakConversation() {
         }
 
         // 如果对话刚开始（只有开场白），播放开场白语音
+        // 注意：Safari 需要用户交互才能播放音频，如果音频未解锁，等待用户点击播放
         if (data.messages.length === 1 && data.messages[0].role === 'assistant' && !data.endedAt) {
           // 延迟播放，确保页面已渲染
           setTimeout(() => {
-            setIsPlayingAudio(true);
-            speakText({
-              text: data.messages[0].content,
-              lang: 'en-US',
-              speaker: 'B',
-              speed: 1.0,
-            }).catch(console.error).finally(() => {
-              setIsPlayingAudio(false);
-            });
+            // 只有在音频已解锁时才自动播放（Safari 限制）
+            if (isAudioUnlocked()) {
+              setIsPlayingAudio(true);
+              speakText({
+                text: data.messages[0].content,
+                lang: 'en-US',
+                speaker: 'B',
+                speed: 1.0,
+              }).catch(console.error).finally(() => {
+                setIsPlayingAudio(false);
+              });
+            }
+            // 如果未解锁，用户需要点击播放按钮
           }, 300);
         }
       } else {
@@ -146,6 +151,9 @@ export function SpeakConversation() {
     // 停止当前播放的音频
     stopSpeaking();
     setIsPlayingAudio(false);
+
+    // 解锁音频播放（Safari 需要）
+    unlockAudio();
 
     // 检查浏览器是否支持语音识别
     if (!speechSupported) {
@@ -238,6 +246,9 @@ export function SpeakConversation() {
       toast.error('您的浏览器不支持语音识别');
       return;
     }
+
+    // 解锁音频播放（Safari 需要）
+    unlockAudio();
 
     setIsFreeTalkMode(true);
     setFreeTalkStatus('listening');
@@ -508,15 +519,27 @@ export function SpeakConversation() {
       setConversationState('idle');
 
       // 播放语音
-      setIsPlayingAudio(true);
-      speakText({
-        text: reply.content,
-        lang: 'en-US',
-        speaker: 'B',
-        speed: 1.0,
-      }).catch(console.error).finally(() => {
-        setIsPlayingAudio(false);
-        // AI 回复完成后，继续监听
+      // 注意：Safari 需要用户交互才能播放音频
+      if (isAudioUnlocked()) {
+        setIsPlayingAudio(true);
+        speakText({
+          text: reply.content,
+          lang: 'en-US',
+          speaker: 'B',
+          speed: 1.0,
+        }).catch(console.error).finally(() => {
+          setIsPlayingAudio(false);
+          // AI 回复完成后，继续监听
+          if (isFreeTalkModeRef.current) {
+            setTimeout(() => {
+              if (isFreeTalkModeRef.current) {
+                startFreeTalkListening();
+              }
+            }, 300);
+          }
+        });
+      } else {
+        // 音频未解锁，直接继续监听
         if (isFreeTalkModeRef.current) {
           setTimeout(() => {
             if (isFreeTalkModeRef.current) {
@@ -524,7 +547,7 @@ export function SpeakConversation() {
             }
           }, 300);
         }
-      });
+      }
 
     } catch (error) {
       toast.error('发送失败');
@@ -572,15 +595,19 @@ export function SpeakConversation() {
       setConversationState('idle');
 
       // 后台异步播放语音，不阻塞界面
-      setIsPlayingAudio(true);
-      speakText({
-        text: reply.content,
-        lang: 'en-US',
-        speaker: 'B', // 女声
-        speed: 1.0,   // 提高语速
-      }).catch(console.error).finally(() => {
-        setIsPlayingAudio(false);
-      });
+      // 注意：Safari 需要用户交互才能播放音频
+      if (isAudioUnlocked()) {
+        setIsPlayingAudio(true);
+        speakText({
+          text: reply.content,
+          lang: 'en-US',
+          speaker: 'B', // 女声
+          speed: 1.0,   // 提高语速
+        }).catch(console.error).finally(() => {
+          setIsPlayingAudio(false);
+        });
+      }
+      // 如果音频未解锁，用户需要点击播放按钮
 
     } catch (error) {
       toast.error('发送失败');
@@ -596,6 +623,9 @@ export function SpeakConversation() {
       setIsPlayingAudio(false);
       return;
     }
+
+    // 解锁音频播放（Safari 需要）
+    unlockAudio();
 
     setIsPlayingAudio(true);
     try {

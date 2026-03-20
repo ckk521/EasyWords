@@ -1,0 +1,120 @@
+// Prisma Schema for EasyWords
+// 支持 SQLite 本地开发 和 Turso 云数据库
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["driverAdapters"]
+  binaryTargets   = ["native", "debian-openssl-3.0.x", "linux-musl"]
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// 单词表
+model Word {
+  id                String    @id @default(uuid())
+  word              String    @unique
+  phoneticUs        String
+  phoneticUk        String
+  chineseDefinition String
+  englishDefinition String
+  partOfSpeech      String?   // 词性
+  audioUs           String?   // 美式发音 URL
+  audioUk           String?   // 英式发音 URL
+  antonyms          String    @default("[]")  // JSON 存储反义词数组
+  sentences         String    // JSON 存储例句数组
+  synonyms          String    // JSON 存储近义词数组
+  createdAt         DateTime  @default(now())
+  lastReviewedAt    DateTime?
+  reviewCount       Int       @default(0)
+
+  @@map("words")
+}
+
+// 文章表
+model Article {
+  id           String   @id @default(uuid())
+  title        String   @default("")  // 文章标题
+  content      String
+  wordIds      String   // JSON 存储单词ID数组
+  type         String   // news | story
+  length       String   // short | medium | long
+  translations String   @default("{}")  // JSON 存储段落翻译 { "0": "翻译1", "1": "翻译2" }
+  createdAt    DateTime @default(now())
+
+  @@map("articles")
+}
+
+// 设置表
+model Settings {
+  id          String   @id @default("default")
+  apiKey      String?  // 加密存储
+  baseURL     String?  // API Base URL
+  model       String?  // 模型名称
+  apiProvider String?  // zhipu | custom
+  updatedAt   DateTime @updatedAt
+
+  @@map("settings")
+}
+
+// 对话表
+model Dialogue {
+  id        String   @id @default(uuid())
+  scene     String              // 场景描述
+  topic     String?             // 用户自定义主题（最多10字）
+  content   String              // JSON 存储对话内容 [{speaker, text}]
+  wordIds   String              // JSON 存储单词ID数组
+  words     String              // JSON 存储单词列表
+  createdAt DateTime @default(now())
+
+  @@map("dialogues")
+}
+
+// ============================================
+// V3.0 AI 口语陪练模块
+// ============================================
+
+// 口语练习场景表
+model SpeakScenario {
+  id               String   @id @default(uuid())
+  name             String   @unique    // 场景名称（如：餐厅点餐）
+  description      String              // 场景描述
+  icon             String?             // 图标 emoji
+  difficultyLevels String   @default("beginner,intermediate,advanced") // 可用难度等级
+  systemPrompts    String              // JSON: { beginner: "...", intermediate: "...", advanced: "..." }
+  openingLines     String              // JSON: { beginner: "...", intermediate: "...", advanced: "..." }
+  learningGoals    String?             // JSON 数组: ["餐饮词汇", "礼貌请求"]
+  sortOrder        Int      @default(0)
+  isActive         Boolean  @default(true)
+  createdAt        DateTime @default(now())
+
+  @@index([sortOrder])
+  @@map("speak_scenarios")
+}
+
+// 口语对话记录表
+model SpeakConversation {
+  id          String    @id @default(uuid())
+  scenarioId  String              // 场景ID
+  difficulty  String              // beginner | intermediate | advanced
+  mode        String              // press-to-talk | free-talk
+
+  // 关联的生词ID列表
+  wordIds     String?   @default("[]")   // JSON: string[]
+
+  // 对话消息记录
+  messages    String    @default("[]")   // JSON: Message[]
+
+  // 学习反馈（对话结束后生成）
+  feedback    String?              // JSON: Feedback
+
+  // 对话统计
+  duration    Int?                 // 对话时长（秒）
+  startedAt   DateTime  @default(now())
+  endedAt     DateTime?
+
+  @@index([startedAt])
+  @@map("speak_conversations")
+}

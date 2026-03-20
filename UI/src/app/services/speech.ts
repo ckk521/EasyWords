@@ -416,7 +416,8 @@ export function isSpeechRecognitionSupported(): boolean {
 export function createSpeechRecognizer(
   onResult: (result: SpeechRecognitionResult) => void,
   onError: (error: string) => void,
-  options: SpeechRecognitionOptions = {}
+  options: SpeechRecognitionOptions = {},
+  onEnd?: () => void  // 新增：识别结束回调
 ): {
   start: () => void;
   stop: () => Promise<string>;
@@ -442,6 +443,10 @@ export function createSpeechRecognizer(
   console.log('[ASR] 创建识别器, lang:', recognition.lang, 'continuous:', recognition.continuous);
 
   recognition.onresult = (event: SpeechRecognitionEvent) => {
+    console.log('[ASR] onresult 触发, resultIndex:', event.resultIndex, 'results.length:', event.results.length);
+    console.log('[ASR] 之前的 finalTranscript:', finalTranscript);
+    console.log('[ASR] 之前的 interimTranscript:', interimTranscript);
+
     interimTranscript = '';
 
     for (let i = event.resultIndex; i < event.results.length; i++) {
@@ -455,7 +460,7 @@ export function createSpeechRecognizer(
     }
 
     const fullTranscript = (finalTranscript + interimTranscript).trim();
-    console.log('[ASR] 当前完整文本:', fullTranscript);
+    console.log('[ASR] 更新后完整文本:', fullTranscript);
 
     onResult({
       transcript: fullTranscript,
@@ -512,7 +517,9 @@ export function createSpeechRecognizer(
   };
 
   recognition.onend = () => {
-    console.log('[ASR] 识别结束, listening:', listening, 'resolveStop:', !!resolveStop);
+    console.log('[ASR] onend 触发, listening:', listening, 'resolveStop:', !!resolveStop);
+    console.log('[ASR] onend 时的 finalTranscript:', finalTranscript);
+    console.log('[ASR] onend 时的 interimTranscript:', interimTranscript);
     listening = false;
 
     if (resolveStop) {
@@ -521,21 +528,30 @@ export function createSpeechRecognizer(
       resolveStop(finalText);
       resolveStop = null;
     }
+
+    // 调用外部 onEnd 回调，让调用方知道识别器已停止
+    if (onEnd) {
+      onEnd();
+    }
   };
 
   recognition.onstart = () => {
-    console.log('[ASR] 识别已开始');
+    console.log('[ASR] onstart 触发, 保留的 finalTranscript:', finalTranscript, 'interimTranscript:', interimTranscript);
     listening = true;
-    finalTranscript = '';
-    interimTranscript = '';
+    // 不再清空 transcript，保留已识别的内容
+    // 这样在识别器重启时不会丢失之前说的内容
   };
 
   return {
-    start: () => {
+    start: (clearPrevious: boolean = false) => {
       if (!listening) {
-        finalTranscript = '';
-        interimTranscript = '';
-        console.log('[ASR] 调用 start()');
+        // 只在明确要求清空时才清空（新对话开始时）
+        // 重启识别器时不清空，保留已识别内容
+        if (clearPrevious) {
+          finalTranscript = '';
+          interimTranscript = '';
+        }
+        console.log('[ASR] 调用 start(), clearPrevious:', clearPrevious, '已有文本:', (finalTranscript + interimTranscript).trim());
         try {
           recognition.start();
         } catch (e: any) {

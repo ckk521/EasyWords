@@ -38,6 +38,9 @@ export function SpeakConversation() {
   const [feedback, setFeedback] = useState<Feedback | null>(null);
   const [endingConversation, setEndingConversation] = useState(false);
 
+  // 高亮生词
+  const [highlightWords, setHighlightWords] = useState<string[]>([]);
+
   // Refs
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const recordingTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -52,11 +55,17 @@ export function SpeakConversation() {
   const hasSpokenRef = useRef<boolean>(false);
   const isFreeTalkModeRef = useRef<boolean>(false);
   const retryCountRef = useRef<number>(0);
-  const isCountingDownRef = useRef<boolean>(false); // 是否正在倒计时
+  const isCountingDownRef = useRef<boolean>(false); // 是否正在倒计时（5秒无说话）
+  const isSendingCountdownRef = useRef<boolean>(false); // 是否正在"即将发送"倒计时
+  const sendingCountdownRef = useRef<NodeJS.Timeout | null>(null); // 即将发送倒计时定时器
+  const isSendingRef = useRef<boolean>(false); // 是否正在发送消息（防止重启识别器）
+  const lastContentRef = useRef<string>(''); // 上次检测时的内容
+  const contentCheckRef = useRef<NodeJS.Timeout | null>(null); // 内容变化检测定时器
 
   // 自由对话模式状态
   const [freeTalkCountdown, setFreeTalkCountdown] = useState<number | null>(null);
   const [freeTalkStatus, setFreeTalkStatus] = useState<'listening' | 'waiting' | 'processing'>('listening');
+  const [sendingCountdown, setSendingCountdown] = useState<number | null>(null); // 即将发送倒计时
 
   const MAX_RETRY_COUNT = 3;
 
@@ -82,6 +91,9 @@ export function SpeakConversation() {
       if (countdownTimeoutRef.current) {
         clearTimeout(countdownTimeoutRef.current);
       }
+      if (sendingCountdownRef.current) {
+        clearTimeout(sendingCountdownRef.current);
+      }
       stopSpeaking();
     };
   }, [conversationId]);
@@ -103,6 +115,10 @@ export function SpeakConversation() {
         setConversation(data);
         setMessages(data.messages);
         setIsFreeTalkMode(data.mode === 'free-talk');
+        // 初始化高亮生词列表
+        if (data.words && data.words.length > 0) {
+          setHighlightWords(data.words);
+        }
         // 如果对话已有反馈，设置反馈状态
         if (data.feedback) {
           setFeedback(data.feedback);
@@ -198,7 +214,7 @@ export function SpeakConversation() {
         }
       );
 
-      speechRecognizerRef.current.start();
+      speechRecognizerRef.current.start(true); // 按住说话模式，新对话清空
     } catch (error) {
       setRecordingState('idle');
       toast.error('无法启动语音识别，请检查麦克风权限');
@@ -261,8 +277,10 @@ export function SpeakConversation() {
     setIsFreeTalkMode(false);
     setFreeTalkStatus('listening');
     setFreeTalkCountdown(null);
+    setSendingCountdown(null);
     retryCountRef.current = 0; // 重置重试计数
     isCountingDownRef.current = false; // 重置倒计时状态
+    isSendingCountdownRef.current = false; // 重置发送倒计时状态
 
     // 清理所有定时器
     if (freeTalkTimeoutRef.current) {
@@ -276,6 +294,10 @@ export function SpeakConversation() {
     if (countdownTimeoutRef.current) {
       clearTimeout(countdownTimeoutRef.current);
       countdownTimeoutRef.current = null;
+    }
+    if (sendingCountdownRef.current) {
+      clearTimeout(sendingCountdownRef.current);
+      sendingCountdownRef.current = null;
     }
 
     // 停止语音识别
@@ -306,7 +328,9 @@ export function SpeakConversation() {
 
     setFreeTalkStatus('listening');
     setFreeTalkCountdown(null);
+    setSendingCountdown(null);
     isCountingDownRef.current = false; // 重置倒计时状态
+    isSendingCountdownRef.current = false; // 重置发送倒计时状态
     interimTextRef.current = '';
     hasSpokenRef.current = false;
     lastSpeechTimeRef.current = 0;
@@ -317,6 +341,23 @@ export function SpeakConversation() {
           // 用户正在说话，重置重试计数
           retryCountRef.current = 0;
           isCountingDownRef.current = false; // 取消倒计时状态
+
+          // 如果正在发送但有新内容进来，取消发送
+          if (isSendingRef.current) {
+            console.log('[FreeTalk] 正在发送但收到新内容，取消发送，重新等待');
+            isSendingRef.current = false;
+          }
+
+          // 用户正在说话，取消"即将发送"倒计时
+          if (isSendingCountdownRef.current) {
+            console.log('[FreeTalk] 用户继续说话，取消发送倒计时');
+            isSendingCountdownRef.current = false;
+            if (sendingCountdownRef.current) {
+              clearTimeout(sendingCountdownRef.current);
+              sendingCountdownRef.current = null;
+            }
+            setSendingCountdown(null);
+          }
 
           // 用户正在说话
           interimTextRef.current = result.transcript;
@@ -340,10 +381,10 @@ export function SpeakConversation() {
             clearTimeout(silenceTimeoutRef.current);
           }
 
-          // 设置静音检测：1.5秒无新语音则发送
+          // 设置静音检测：2秒无新语音则进入"即将发送"状态
           silenceTimeoutRef.current = setTimeout(() => {
-            handleFreeTalkSilence();
-          }, 1500);
+            startSendingCountdown();
+          }, 2000);
         },
         (error) => {
           console.error('[FreeTalk] 识别错误:', error, '重试次数:', retryCountRef.current, '正在倒计时:', isCountingDownRef.current);
@@ -396,10 +437,60 @@ export function SpeakConversation() {
           lang: 'en-US',
           continuous: true,
           interimResults: true,
+        },
+        // onEnd 回调：识别器自动结束时触发
+        () => {
+          console.log('[FreeTalk] 识别器自动结束, 发送倒计时中:', isSendingCountdownRef.current, '正在倒计时:', isCountingDownRef.current, '正在发送:', isSendingRef.current);
+
+          // 如果正在发送消息，不要重启识别器
+          if (isSendingRef.current) {
+            console.log('[FreeTalk] 正在发送消息，不重启识别器');
+            return;
+          }
+
+          // 如果正在退出倒计时，不重启
+          if (isCountingDownRef.current) {
+            console.log('[FreeTalk] 正在退出倒计时，不重启识别器');
+            return;
+          }
+
+          // 取消发送倒计时，重新开始静音检测
+          if (isSendingCountdownRef.current) {
+            console.log('[FreeTalk] 识别器停止，取消发送倒计时，重新开始静音检测');
+            isSendingCountdownRef.current = false;
+            if (sendingCountdownRef.current) {
+              clearTimeout(sendingCountdownRef.current);
+              sendingCountdownRef.current = null;
+            }
+            setSendingCountdown(null);
+          }
+
+          // 重启识别器继续监听
+          if (isFreeTalkModeRef.current && speechRecognizerRef.current) {
+            console.log('[FreeTalk] 识别器停止，立即重启继续监听');
+            setTimeout(() => {
+              if (!isCountingDownRef.current && isFreeTalkModeRef.current && !isSendingRef.current && speechRecognizerRef.current) {
+                try {
+                  speechRecognizerRef.current.start(false); // 保留已识别内容
+                  console.log('[FreeTalk] 识别器已重启');
+
+                  // 重启后重新开始静音检测
+                  if (silenceTimeoutRef.current) {
+                    clearTimeout(silenceTimeoutRef.current);
+                  }
+                  silenceTimeoutRef.current = setTimeout(() => {
+                    startSendingCountdown();
+                  }, 2000);
+                } catch (e) {
+                  console.error('[FreeTalk] 重启识别器失败:', e);
+                }
+              }
+            }, 100);
+          }
         }
       );
 
-      speechRecognizerRef.current.start();
+      speechRecognizerRef.current.start(true); // 自由对话模式开始，清空之前内容
 
       // 设置超时保护：5秒内没有开始说话，开始倒计时
       freeTalkTimeoutRef.current = setTimeout(() => {
@@ -469,17 +560,66 @@ export function SpeakConversation() {
     }
   };
 
-  // 处理静音检测（用户说话后静音1.5秒）
-  const handleFreeTalkSilence = async () => {
+  // 开始"即将发送"倒计时（静音2秒后触发）
+  const startSendingCountdown = () => {
     if (!isFreeTalkModeRef.current) return;
 
-    // 停止识别
+    console.log('[FreeTalk] 静音2秒，开始发送倒计时');
+    isSendingCountdownRef.current = true;
+    setSendingCountdown(2);
+
+    let countdown = 2;
+    const tick = () => {
+      if (!isFreeTalkModeRef.current || !isSendingCountdownRef.current) {
+        console.log('[FreeTalk] 发送倒计时被取消');
+        return; // 已被取消
+      }
+      countdown--;
+      if (countdown <= 0) {
+        // 倒计时结束，发送消息
+        console.log('[FreeTalk] 发送倒计时结束，发送消息');
+        isSendingCountdownRef.current = false;
+        setSendingCountdown(null);
+        doSendFreeTalkMessage();
+      } else {
+        setSendingCountdown(countdown);
+        sendingCountdownRef.current = setTimeout(tick, 1000);
+      }
+    };
+
+    sendingCountdownRef.current = setTimeout(tick, 1000);
+  };
+
+  // 执行发送自由对话消息
+  const doSendFreeTalkMessage = async () => {
+    if (!isFreeTalkModeRef.current) return;
+    if (isSendingRef.current) return; // 防止重复调用
+
+    isSendingRef.current = true; // 标记正在发送
+    console.log('[FreeTalk] doSendFreeTalkMessage 被调用');
+    console.log('[FreeTalk] interimTextRef.current:', interimTextRef.current);
+
+    // 停止识别并获取最终文本
     if (speechRecognizerRef.current) {
       try {
+        console.log('[FreeTalk] 调用 stop() 获取最终文本...');
         const finalText = await speechRecognizerRef.current.stop();
+
+        // 检查是否被取消（用户继续说话了）
+        if (!isSendingRef.current) {
+          console.log('[FreeTalk] 发送被取消，重新开始等待');
+          // 重新启动识别器继续监听
+          if (speechRecognizerRef.current) {
+            speechRecognizerRef.current.start(false);
+          }
+          return;
+        }
+
+        console.log('[FreeTalk] stop() 返回的文本:', finalText);
         speechRecognizerRef.current = null;
 
         if (finalText.trim()) {
+          console.log('[FreeTalk] 发送文本:', finalText.trim());
           await sendFreeTalkMessage(finalText.trim());
         } else if (isFreeTalkModeRef.current) {
           // 没有内容，重新开始监听
@@ -490,14 +630,39 @@ export function SpeakConversation() {
         if (isFreeTalkModeRef.current) {
           startFreeTalkListening();
         }
+      } finally {
+        isSendingRef.current = false;
       }
+    } else if (interimTextRef.current.trim()) {
+      // 如果识别器已停止但有缓存文本，发送缓存文本
+      console.log('[FreeTalk] 识别器已停止，发送缓存文本:', interimTextRef.current.trim());
+      await sendFreeTalkMessage(interimTextRef.current.trim());
+      isSendingRef.current = false;
+    } else if (isFreeTalkModeRef.current) {
+      startFreeTalkListening();
+      isSendingRef.current = false;
     }
   };
 
   // 发送自由对话消息
   const sendFreeTalkMessage = async (text: string) => {
-    setFreeTalkStatus('processing');
+    // 立即清空缓存，防止重复发送
+    interimTextRef.current = '';
     setInputText('');
+
+    // 取消所有待处理的定时器
+    if (silenceTimeoutRef.current) {
+      clearTimeout(silenceTimeoutRef.current);
+      silenceTimeoutRef.current = null;
+    }
+    if (sendingCountdownRef.current) {
+      clearTimeout(sendingCountdownRef.current);
+      sendingCountdownRef.current = null;
+    }
+    isSendingCountdownRef.current = false;
+    setSendingCountdown(null);
+
+    setFreeTalkStatus('processing');
 
     try {
       // 添加用户消息
@@ -511,11 +676,16 @@ export function SpeakConversation() {
       setConversationState('thinking');
 
       // 获取 AI 回复
-      const reply = await speakApi.sendMessage(conversationId!, text);
+      const { reply, words } = await speakApi.sendMessage(conversationId!, text);
 
       // 添加 AI 消息
       setMessages((prev) => [...prev, reply]);
       setConversationState('idle');
+
+      // 更新高亮生词列表
+      if (words && words.length > 0) {
+        setHighlightWords((prev) => [...new Set([...prev, ...words])]);
+      }
 
       // 播放语音
       // 用户已进行交互（自由对话模式），可以播放音频
@@ -576,10 +746,15 @@ export function SpeakConversation() {
 
     try {
       // 获取 AI 回复
-      const reply = await speakApi.sendMessage(conversationId!, text);
+      const { reply, words } = await speakApi.sendMessage(conversationId!, text);
 
       // 添加 AI 消息，立即显示文本
       setMessages((prev) => [...prev, reply]);
+
+      // 更新高亮生词列表
+      if (words && words.length > 0) {
+        setHighlightWords((prev) => [...new Set([...prev, ...words])]);
+      }
 
       // 立即恢复 idle 状态，让用户可以继续输入
       setConversationState('idle');
@@ -735,12 +910,18 @@ export function SpeakConversation() {
 
   // 渲染带生词高亮的文本（仅用于 AI 消息）
   const renderHighlightedText = (text: string) => {
-    if (!conversation?.words || conversation.words.length === 0) {
+    // 合并对话关联的生词和本次使用的生词
+    const allWords = [...new Set([
+      ...(conversation?.words || []),
+      ...highlightWords
+    ])];
+
+    if (allWords.length === 0) {
       return text;
     }
 
     // 创建生词集合（小写，用于匹配）
-    const wordSet = new Set(conversation.words.map(w => w.toLowerCase()));
+    const wordSet = new Set(allWords.map(w => w.toLowerCase()));
 
     // 使用正则匹配单词边界
     const parts = text.split(/(\b[a-zA-Z]+(?:'[a-zA-Z]+)?\b)/g);
@@ -950,13 +1131,20 @@ export function SpeakConversation() {
           {/* 自由对话模式状态提示 */}
           {isFreeTalkMode && (
             <div className={`mb-4 p-3 rounded-lg text-center ${
-              freeTalkCountdown !== null
+              sendingCountdown !== null
+                ? 'bg-yellow-50 border border-yellow-200'
+                : freeTalkCountdown !== null
                 ? 'bg-orange-50 border border-orange-200'
                 : freeTalkStatus === 'processing'
                 ? 'bg-blue-50 border border-blue-200'
                 : 'bg-green-50 border border-green-200'
             }`}>
-              {freeTalkCountdown !== null ? (
+              {sendingCountdown !== null ? (
+                <div className="flex items-center justify-center gap-2 text-yellow-700">
+                  <AlertCircle className="size-5" />
+                  <span className="font-medium">即将发送... {sendingCountdown}秒（继续说话可取消）</span>
+                </div>
+              ) : freeTalkCountdown !== null ? (
                 <div className="flex items-center justify-center gap-2 text-orange-600">
                   <AlertCircle className="size-5" />
                   <span className="font-medium">{freeTalkCountdown}秒后将自动发送当前语音</span>

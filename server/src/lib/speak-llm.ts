@@ -88,9 +88,10 @@ export async function generateSpeakReply(
   if (words.length > 0) {
     enhancedSystemPrompt += `\n\n【生词使用】`
     enhancedSystemPrompt += `\n- VOCABULARY WORDS TO USE: ${words.join(', ')}`
-    enhancedSystemPrompt += `\n- You MUST use at least 1 of these vocabulary words within every 2-3 turns of conversation.`
-    enhancedSystemPrompt += `\n- Try to use 1 vocabulary word in your current response if you haven't used one recently.`
-    enhancedSystemPrompt += `\n- Use the words naturally in context, do not force them awkwardly.`
+    enhancedSystemPrompt += `\n- Try to naturally incorporate 1-2 of these words into your response when it fits the context.`
+    enhancedSystemPrompt += `\n- IMPORTANT: Only use a word if it flows naturally in the conversation. Do NOT force words awkwardly or change the topic just to use them.`
+    enhancedSystemPrompt += `\n- Maintain conversation coherence and relevance to what the learner is saying.`
+    enhancedSystemPrompt += `\n- If no word fits naturally, that's perfectly fine - prioritize natural conversation over forced vocabulary usage.`
   }
 
   // 构建消息列表

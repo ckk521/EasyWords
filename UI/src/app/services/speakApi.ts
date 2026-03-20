@@ -50,6 +50,7 @@ interface CreateConversationRequest {
 // 发送消息响应
 interface SendMessageResponse {
   reply: SpeakMessage;
+  words?: string[]; // 本次对话使用的生词
 }
 
 // 结束对话响应
@@ -118,7 +119,7 @@ export const speakApi = {
   },
 
   // 发送消息
-  async sendMessage(conversationId: string, text: string): Promise<SpeakMessage> {
+  async sendMessage(conversationId: string, text: string): Promise<{ reply: SpeakMessage; words?: string[] }> {
     const result = await request<SendMessageResponse>(
       `/speak/conversations/${conversationId}/message`,
       {
@@ -126,7 +127,7 @@ export const speakApi = {
         body: JSON.stringify({ text }),
       }
     );
-    return result.reply;
+    return { reply: result.reply, words: result.words };
   },
 
   // 结束对话

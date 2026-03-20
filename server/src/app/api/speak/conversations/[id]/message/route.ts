@@ -74,26 +74,33 @@ export async function POST(
     const systemPrompts = JSON.parse(scenario.systemPrompts || '{}')
     const systemPrompt = systemPrompts[conversation.difficulty] || 'You are a helpful assistant.'
 
-    // 获取关联生词
-    const wordIds = JSON.parse(conversation.wordIds || '[]')
+    // 获取生词本中的生词（随机选取 5-10 个）
+    const allWords = await prisma.word.findMany({
+      select: { word: true },
+    })
+
     let words: string[] = []
+    if (allWords.length > 0) {
+      // 随机打乱并选取 5-10 个
+      const shuffled = allWords.sort(() => Math.random() - 0.5)
+      const count = Math.min(Math.floor(Math.random() * 6) + 5, allWords.length) // 5-10个
+      words = shuffled.slice(0, count).map((w) => w.word)
+    }
+
+    // 获取关联生词（合并）
+    const wordIds = JSON.parse(conversation.wordIds || '[]')
     if (wordIds.length > 0) {
-      const wordRecords = await prisma.word.findMany({
+      const linkedWords = await prisma.word.findMany({
         where: { id: { in: wordIds } },
         select: { word: true },
       })
-      words = wordRecords.map((w) => w.word)
-    }
-
-    // 如果有关联生词，在 system prompt 中提示
-    let finalSystemPrompt = systemPrompt
-    if (words.length > 0) {
-      finalSystemPrompt = `${systemPrompt}\n\n请尝试在对话中自然地使用以下单词：${words.join(', ')}`
+      // 合并并去重
+      words = [...new Set([...words, ...linkedWords.map((w) => w.word)])]
     }
 
     // 生成 AI 回复
     const replyContent = await generateSpeakReply(
-      finalSystemPrompt,
+      systemPrompt,
       messages.slice(0, -1), // 不包括刚添加的用户消息
       text,
       apiConfig,
@@ -120,6 +127,7 @@ export async function POST(
 
     return successResponse({
       reply: aiMessage,
+      words, // 返回本次使用的生词，用于前端高亮
     })
   } catch (error: any) {
     console.error('发送消息失败:', error)

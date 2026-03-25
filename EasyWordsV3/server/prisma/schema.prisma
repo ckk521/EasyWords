@@ -1,0 +1,230 @@
+// Prisma Schema for EasyWords V3
+// 支持 SQLite 本地开发 和 Turso 云数据库
+// 包含用户系统（与 Admin 管理后台共享）
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["driverAdapters"]
+  binaryTargets   = ["native", "debian-openssl-3.0.x", "linux-musl"]
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("TURSO_DATABASE_URL")
+}
+
+// ==================== V3 原有表（添加 userId）====================
+
+/// 单词表
+model Word {
+  id                String    @id @default(uuid())
+  userId            String?
+  user              User?     @relation(fields: [userId], references: [id])
+  word              String
+  phoneticUs        String    @default("")
+  phoneticUk        String    @default("")
+  chineseDefinition String
+  englishDefinition String    @default("")
+  partOfSpeech      String?
+  audioUs           String?
+  audioUk           String?
+  antonyms          String    @default("[]")
+  sentences         String    @default("[]")
+  synonyms          String    @default("[]")
+  createdAt         DateTime  @default(now())
+  lastReviewedAt    DateTime?
+  reviewCount       Int       @default(0)
+
+  @@unique([word, userId])
+  @@index([userId])
+  @@index([word])
+  @@map("words")
+}
+
+/// 文章表
+model Article {
+  id           String   @id @default(uuid())
+  userId       String?
+  user         User?    @relation(fields: [userId], references: [id])
+  title        String   @default("")
+  content      String
+  wordIds      String   @default("[]")
+  type         String   @default("news")
+  length       String   @default("medium")
+  translations String   @default("{}")
+  createdAt    DateTime @default(now())
+
+  @@index([userId])
+  @@map("articles")
+}
+
+/// 设置表
+model Settings {
+  id          String   @id @default("default")
+  apiKey      String?
+  baseURL     String?
+  model       String?
+  apiProvider String?
+  updatedAt   DateTime @updatedAt
+
+  @@map("settings")
+}
+
+/// 对话表
+model Dialogue {
+  id        String   @id @default(uuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id])
+  scene     String
+  topic     String?
+  content   String   @default("[]")
+  wordIds   String   @default("[]")
+  words     String   @default("[]")
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@map("dialogues")
+}
+
+/// 口语练习场景表
+model SpeakScenario {
+  id               String   @id @default(uuid())
+  name             String   @unique
+  description      String
+  icon             String?
+  difficultyLevels String   @default("beginner,intermediate,advanced")
+  systemPrompts    String   @default("{}")
+  openingLines     String   @default("{}")
+  learningGoals    String?
+  sortOrder        Int      @default(0)
+  isActive         Boolean  @default(true)
+  createdAt        DateTime @default(now())
+
+  @@index([sortOrder])
+  @@map("speak_scenarios")
+}
+
+/// 口语对话记录表
+model SpeakConversation {
+  id         String    @id @default(uuid())
+  userId     String?
+  user       User?     @relation(fields: [userId], references: [id])
+  scenarioId String?
+  difficulty String    @default("intermediate")
+  mode       String    @default("press-to-talk")
+  wordIds    String?   @default("[]")
+  messages   String    @default("[]")
+  feedback   String?
+  duration   Int?
+  startedAt  DateTime  @default(now())
+  endedAt    DateTime?
+
+  @@index([userId])
+  @@index([startedAt])
+  @@map("speak_conversations")
+}
+
+// ==================== 用户系统表（与 Admin 共享）====================
+
+/// 用户表
+model User {
+  id        String @id @default(uuid())
+  username  String @unique
+  email     String @unique
+  passwordHash String
+  nickname  String?
+  createdAt DateTime @default(now())
+  lastLoginAt DateTime?
+
+  // 权限和期限
+  expiresAt DateTime?
+  expiryMode String? // "permanent" | "days" | "date" | "minutes" - 记住用户选择的模式
+  isActive  Boolean @default(true)
+
+  // 登录安全
+  loginFailCount  Int @default(0)
+  loginLockedUntil DateTime?
+
+  // 用户自定义 API 配置
+  canUseOwnApi  Boolean @default(false)  // 是否允许使用自己的 API
+  ownApiKey     String?                   // 加密存储
+  ownBaseURL    String?
+  ownModel      String?
+
+  // 关联数据
+  words         Word[]
+  articles      Article[]
+  dialogues     Dialogue[]
+  conversations SpeakConversation[]
+  permission    UserModulePermission?
+  loginLogs     LoginLog[]
+  activities    UserActivity[]
+
+  @@map("users")
+}
+
+/// 管理员表
+model Admin {
+  id            String   @id @default(uuid())
+  username      String   @unique
+  passwordHash  String
+  role          String   @default("admin")
+  createdAt     DateTime @default(now())
+  lastLoginAt   DateTime?
+
+  @@map("admins")
+}
+
+/// 用户模块权限表
+model UserModulePermission {
+  id           String  @id @default(uuid())
+  userId       String
+  user         User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  vocabulary   Boolean @default(true)
+  reading      Boolean @default(true)
+  dialogue     Boolean @default(true)
+  speak        Boolean @default(true)
+
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([userId])
+  @@map("user_module_permissions")
+}
+
+/// 登录日志表
+model LoginLog {
+  id          String   @id @default(uuid())
+  userId      String?
+  user        User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  username    String
+  status      String
+  failReason  String?
+  ipAddress   String?
+  userAgent   String?
+  createdAt   DateTime @default(now())
+
+  @@index([userId])
+  @@index([createdAt])
+  @@map("login_logs")
+}
+
+/// 用户活动记录表
+model UserActivity {
+  id           String   @id @default(uuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  action       String
+  resourceId   String?
+  resourceType String?
+  details      String?
+
+  createdAt    DateTime @default(now())
+
+  @@index([userId])
+  @@index([createdAt])
+  @@index([action])
+  @@map("user_activities")
+}

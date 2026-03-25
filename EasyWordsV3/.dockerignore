@@ -1,0 +1,40 @@
+# 依赖目录
+**/node_modules
+.pnpm-store
+
+# 构建产物
+**/.next
+**/dist
+server/public
+
+# 环境变量文件（由 docker-compose 注入）
+**/.env
+**/.env.*
+!.env.example
+!UI/.env.example
+
+# Git
+.git
+.gitignore
+
+# IDE
+.idea
+.vscode
+*.swp
+*.swo
+
+# 系统文件
+.DS_Store
+Thumbs.db
+
+# 日志
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# 测试
+coverage
+.nyc_output
+
+# TypeScript
+*.tsbuildinfo

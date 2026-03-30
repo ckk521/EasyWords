@@ -227,6 +227,63 @@ export const usersApi = {
     request<ActivityTrend[]>('/api/users/stats/activity-trend', { token }),
 }
 
+// ==================== Settings API ====================
+
+export type ModelProvider = 'deepseek' | 'zhipu' | 'infi-coding-plan'
+
+export interface ModelProviderConfig {
+  name: string
+  defaultBaseUrl: string
+  defaultModel: string
+}
+
+export const MODEL_PROVIDERS: Record<ModelProvider, ModelProviderConfig> = {
+  deepseek: {
+    name: 'DeepSeek',
+    defaultBaseUrl: 'https://api.deepseek.com',
+    defaultModel: 'deepseek-chat',
+  },
+  zhipu: {
+    name: '智普',
+    defaultBaseUrl: 'https://open.bigmodel.cn/api/paas/v4/',
+    defaultModel: 'glm-4-flash',
+  },
+  'infi-coding-plan': {
+    name: 'Infi Coding Plan',
+    defaultBaseUrl: '',
+    defaultModel: '',
+  },
+}
+
+export interface SettingsData {
+  apiProvider: ModelProvider | null
+  apiKey: string | null  // 脱敏后的 API Key
+  baseURL: string | null
+  model: string | null
+}
+
+export const settingsApi = {
+  // 获取全局设置
+  get: (token: string) =>
+    request<SettingsData>('/api/admin/settings', { token }),
+
+  // 更新全局设置
+  update: (token: string, data: { apiProvider: ModelProvider; apiKey: string; baseURL?: string; model?: string }) =>
+    request<{ message: string }>('/api/admin/settings', {
+      method: 'PUT',
+      body: data,
+      token,
+    }),
+
+  // 验证 API 配置
+  verify: (token: string, data: { apiProvider?: ModelProvider; apiKey: string; baseURL?: string; model?: string }) =>
+    request<{ valid: boolean; message?: string; error?: string; provider?: string; baseURL?: string; model?: string }>('/api/admin/settings/verify', {
+      method: 'POST',
+      body: data,
+      token,
+    }),
+}
+
 // Token 管理
 const TOKEN_KEY = 'admin_token'
 

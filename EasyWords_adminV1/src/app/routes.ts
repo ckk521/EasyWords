@@ -3,6 +3,7 @@ import { AdminLogin } from "./pages/admin/Login";
 import { AdminDashboard } from "./pages/admin/Dashboard";
 import { AdminUsers } from "./pages/admin/Users";
 import { AdminUserDetail } from "./pages/admin/UserDetail";
+import { AdminSettings } from "./pages/admin/Settings";
 
 export const router = createBrowserRouter([
   {
@@ -20,6 +21,10 @@ export const router = createBrowserRouter([
   {
     path: "/admin/users/:id",
     Component: AdminUserDetail,
+  },
+  {
+    path: "/admin/settings",
+    Component: AdminSettings,
   },
   {
     path: "*",

@@ -7,6 +7,7 @@ import {
   BookOpen,
   Menu,
   X,
+  Settings,
 } from "lucide-react";
 import { adminStore } from "../../store/adminStore";
 
@@ -25,6 +26,12 @@ const navItems = [
     path: "/admin/users",
     label: "用户管理",
     icon: Users,
+    end: false,
+  },
+  {
+    path: "/admin/settings",
+    label: "配置",
+    icon: Settings,
     end: false,
   },
 ];

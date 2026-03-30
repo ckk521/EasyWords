@@ -1,6 +1,7 @@
 import { Link, useLocation, useNavigate } from 'react-router';
 import { BookOpen, Library, FileText, Settings, Newspaper, Headphones, Mic, User, LogOut, ChevronDown } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
+import { getStoredUserApiStatus } from '../../services/auth';
 import { useState, useRef, useEffect } from 'react';
 
 export function Header() {
@@ -10,14 +11,26 @@ export function Header() {
   const [showDropdown, setShowDropdown] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  const navItems = [
+  // 获取用户 API 权限状态
+  const userApiStatus = getStoredUserApiStatus();
+  const canAccessSettings = userApiStatus?.canUseOwnApi ?? false;
+
+  const allNavItems = [
     { path: '/', label: '查词', icon: BookOpen },
     { path: '/vocabulary', label: '生词本', icon: Library },
     { path: '/articles', label: '生词阅读', icon: Newspaper },
     { path: '/dialogues', label: '生词会话', icon: Headphones },
     { path: '/speak', label: '口语陪练', icon: Mic },
-    { path: '/settings', label: '设置', icon: Settings }
+    { path: '/settings', label: '设置', icon: Settings, requireSettingsAccess: true }
   ];
+
+  // 根据权限过滤导航项
+  const navItems = allNavItems.filter(item => {
+    if (item.requireSettingsAccess) {
+      return canAccessSettings;
+    }
+    return true;
+  });
 
   const isActive = (path: string) => {
     if (path === '/articles') {

@@ -4,14 +4,18 @@ import { toast } from 'sonner'
 import {
   login as loginApi,
   verifyUser,
+  getUserApiStatus,
   getStoredToken,
   getStoredUser,
   setStoredToken,
   setStoredUser,
   clearStoredToken,
   clearStoredUser,
+  setStoredUserApiStatus,
+  clearStoredUserApiStatus,
   User,
   LoginRequest,
+  UserApiStatus,
 } from '../services/auth'
 
 interface AuthContextType {
@@ -44,12 +48,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setUser(response.user)
           // 更新存储的用户信息
           setStoredUser(response.user)
+
+          // 获取用户 API 权限状态
+          try {
+            const apiStatus = await getUserApiStatus()
+            setStoredUserApiStatus(apiStatus)
+          } catch {
+            // 忽略错误，使用默认值
+          }
         } catch (error) {
           // 验证失败（账号被禁用或过期），清除登录状态
           const errorMessage = error instanceof Error ? error.message : '请重新登录'
           console.error('用户验证失败:', errorMessage)
           clearStoredToken()
           clearStoredUser()
+          clearStoredUserApiStatus()
           // 如果不在登录页，显示提示并跳转到登录页
           if (window.location.pathname !== '/login') {
             toast.error(errorMessage)
@@ -74,12 +87,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setStoredUser(response.user)
     setToken(response.token)
     setUser(response.user)
+
+    // 登录成功后获取用户 API 权限状态
+    try {
+      const apiStatus = await getUserApiStatus()
+      setStoredUserApiStatus(apiStatus)
+    } catch {
+      // 如果获取失败，设置默认值
+      setStoredUserApiStatus({
+        canUseOwnApi: false,
+        hasOwnConfig: false,
+        ownBaseURL: null,
+        ownModel: null,
+      })
+    }
   }, [])
 
   // 登出
   const logout = useCallback(() => {
     clearStoredToken()
     clearStoredUser()
+    clearStoredUserApiStatus()
     setToken(null)
     setUser(null)
   }, [])

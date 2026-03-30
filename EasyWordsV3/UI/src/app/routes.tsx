@@ -14,6 +14,7 @@ import { Header } from './components/layout/Header';
 import { Toaster } from './components/ui/sonner';
 import { WelcomeDialog } from './components/WelcomeDialog';
 import { useAuth } from './contexts/AuthContext';
+import { getStoredUserApiStatus } from './services/auth';
 import { Loader2 } from 'lucide-react';
 
 // 路由守卫组件
@@ -69,6 +70,18 @@ function LoginLayout() {
       <Toaster />
     </>
   );
+}
+
+// 设置页面守卫
+function SettingsGuard() {
+  const userApiStatus = getStoredUserApiStatus();
+  const canAccessSettings = userApiStatus?.canUseOwnApi ?? false;
+
+  if (!canAccessSettings) {
+    return <Navigate to="/" replace />;
+  }
+
+  return <Settings />;
 }
 
 function NotFound() {
@@ -132,7 +145,7 @@ export const router = createBrowserRouter([
       },
       {
         path: '/settings',
-        element: <Settings />,
+        element: <SettingsGuard />,
       },
       {
         path: '*',

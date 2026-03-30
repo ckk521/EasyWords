@@ -51,13 +51,15 @@ export function Settings() {
       // 尝试加载用户 API 状态（可能失败，因为用户没有权限或未登录）
       try {
         const userApiData = await api.getUserApiStatus();
+        console.log('[Settings] getUserApiStatus response:', userApiData);
         setUserApiStatus(userApiData);
 
         // 预填充用户配置
         if (userApiData.ownBaseURL) setUserBaseURL(userApiData.ownBaseURL);
         if (userApiData.ownModel) setUserModel(userApiData.ownModel);
-      } catch {
+      } catch (error) {
         // 用户没有权限或 API 不可用，设置为默认状态
+        console.log('[Settings] getUserApiStatus error:', error);
         setUserApiStatus({
           canUseOwnApi: false,
           hasOwnConfig: false,

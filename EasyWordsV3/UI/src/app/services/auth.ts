@@ -27,6 +27,13 @@ export interface VerifyResponse {
   user: User
 }
 
+export interface UserApiStatus {
+  canUseOwnApi: boolean
+  hasOwnConfig: boolean
+  ownBaseURL: string | null
+  ownModel: string | null
+}
+
 /**
  * 用户登录
  */
@@ -42,6 +49,13 @@ export async function login(data: LoginRequest): Promise<LoginResponse> {
  */
 export async function verifyUser(): Promise<VerifyResponse> {
   return request<VerifyResponse>('/auth/verify')
+}
+
+/**
+ * 获取用户 API 配置权限状态
+ */
+export async function getUserApiStatus(): Promise<UserApiStatus> {
+  return request<UserApiStatus>('/settings/user-api')
 }
 
 /**
@@ -90,4 +104,31 @@ export function setStoredUser(user: User): void {
  */
 export function clearStoredUser(): void {
   localStorage.removeItem('auth_user')
+}
+
+/**
+ * 获取存储的用户 API 权限状态
+ */
+export function getStoredUserApiStatus(): UserApiStatus | null {
+  const statusStr = localStorage.getItem('auth_user_api_status')
+  if (!statusStr) return null
+  try {
+    return JSON.parse(statusStr)
+  } catch {
+    return null
+  }
+}
+
+/**
+ * 存储用户 API 权限状态
+ */
+export function setStoredUserApiStatus(status: UserApiStatus): void {
+  localStorage.setItem('auth_user_api_status', JSON.stringify(status))
+}
+
+/**
+ * 清除用户 API 权限状态
+ */
+export function clearStoredUserApiStatus(): void {
+  localStorage.removeItem('auth_user_api_status')
 }

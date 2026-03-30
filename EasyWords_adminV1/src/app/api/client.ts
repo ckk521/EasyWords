@@ -207,6 +207,13 @@ export const usersApi = {
   getActivities: (token: string, id: string, limit?: number) =>
     request<Activity[]>(`/api/users/${id}/activities?limit=${limit || 20}`, { token }),
 
+  // 重置密码
+  resetPassword: (token: string, id: string) =>
+    request<{ message: string }>(`/api/users/${id}/reset-password`, {
+      method: 'PUT',
+      token,
+    }),
+
   // 获取统计数据
   getStats: (token: string) =>
     request<Stats>('/api/users/stats/overview', { token }),

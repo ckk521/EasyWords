@@ -182,6 +182,16 @@ export const adminStore = {
     return result.success && result.data ? result.data : []
   },
 
+  // Reset password
+  resetPassword: async (userId: string): Promise<{ success: boolean; message?: string }> => {
+    if (!adminToken) return { success: false }
+    const result = await usersApi.resetPassword(adminToken, userId)
+    if (result.success) {
+      return { success: true, message: result.message }
+    }
+    return { success: false }
+  },
+
   // Cache version for reactivity
   getCacheVersion: () => cacheVersion,
 }

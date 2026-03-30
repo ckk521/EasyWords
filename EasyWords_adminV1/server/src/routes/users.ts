@@ -379,6 +379,49 @@ users.get('/:id/login-logs', async (c) => {
   }
 })
 
+// 重置用户密码
+users.put('/:id/reset-password', async (c) => {
+  try {
+    const userId = c.req.param('id')
+    const DEFAULT_PASSWORD = '111111'
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+    })
+
+    if (!user) {
+      return c.json<ApiResponse>({
+        success: false,
+        error: '用户不存在',
+      }, 404)
+    }
+
+    // 哈希默认密码
+    const passwordHash = await hashPassword(DEFAULT_PASSWORD)
+
+    // 更新密码并重置登录失败计数
+    await prisma.user.update({
+      where: { id: userId },
+      data: {
+        passwordHash,
+        loginFailCount: 0,
+        loginLockedUntil: null,
+      },
+    })
+
+    return c.json<ApiResponse>({
+      success: true,
+      message: `密码已重置为: ${DEFAULT_PASSWORD}`,
+    })
+  } catch (error) {
+    console.error('Reset password error:', error)
+    return c.json<ApiResponse>({
+      success: false,
+      error: '重置密码失败',
+    }, 500)
+  }
+})
+
 // 获取用户活动记录
 users.get('/:id/activities', async (c) => {
   try {

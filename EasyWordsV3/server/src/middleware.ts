@@ -7,6 +7,7 @@ const PUBLIC_PATHS = [
   '/api/auth/login',
   '/api/auth/register',
   '/api/settings/verify',
+  '/api/admin/login',
 ]
 
 export async function middleware(request: NextRequest) {

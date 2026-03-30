@@ -10,6 +10,7 @@ import {
   Activity,
   Clock,
   AlertTriangle,
+  KeyRound,
 } from "lucide-react";
 import { AdminLayout } from "../../components/admin/AdminLayout";
 import { adminStore, User, LoginLog, Activity as ActivityType } from "../../api/client";
@@ -29,8 +30,20 @@ type TabKey = "info" | "permission" | "activities" | "login-logs";
 type ExpiryMode = "permanent" | "days" | "date" | "minutes";
 
 // ---- BasicInfo Tab ----
-function BasicInfoTab({ user }: { user: User }) {
+function BasicInfoTab({ user, onResetPassword }: { user: User; onResetPassword: () => Promise<void> }) {
   const status = getUserStatus(user);
+  const [resetting, setResetting] = useState(false);
+
+  const handleResetPassword = async () => {
+    if (!confirm('确定要将该用户的密码重置为 111111 吗？')) return;
+    setResetting(true);
+    try {
+      await onResetPassword();
+      alert('密码已重置为: 111111');
+    } finally {
+      setResetting(false);
+    }
+  };
 
   const fields = [
     { label: "用户 ID", value: user.id },
@@ -85,6 +98,31 @@ function BasicInfoTab({ user }: { user: User }) {
               <span className="text-sm text-gray-800">{f.value}</span>
             </div>
           ))}
+        </div>
+      </div>
+
+      {/* Reset Password */}
+      <div className="bg-white rounded-xl border border-gray-200">
+        <div className="px-5 py-4 border-b border-gray-100">
+          <h3 className="text-sm text-gray-700" style={{ fontWeight: 600 }}>
+            密码管理
+          </h3>
+        </div>
+        <div className="p-5">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-700">重置用户密码</p>
+              <p className="text-xs text-gray-400 mt-0.5">重置后密码将变为: 111111</p>
+            </div>
+            <button
+              onClick={handleResetPassword}
+              disabled={resetting}
+              className="flex items-center gap-2 px-4 py-2 bg-amber-500 hover:bg-amber-600 disabled:bg-amber-300 text-white rounded-lg text-sm transition-colors"
+            >
+              <KeyRound size={14} />
+              {resetting ? "重置中..." : "重置密码"}
+            </button>
+          </div>
         </div>
       </div>
 
@@ -743,6 +781,14 @@ export function AdminUserDetail() {
     }
   };
 
+  const handleResetPassword = async () => {
+    if (!id) return;
+    const result = await adminStore.resetPassword(id);
+    if (!result.success) {
+      alert('重置密码失败');
+    }
+  };
+
   return (
     <AdminLayout>
       <div className="space-y-5">
@@ -803,7 +849,9 @@ export function AdminUserDetail() {
 
           {/* Tab content */}
           <div className="p-5">
-            {activeTab === "info" && <BasicInfoTab user={user} />}
+            {activeTab === "info" && (
+              <BasicInfoTab user={user} onResetPassword={handleResetPassword} />
+            )}
             {activeTab === "permission" && (
               <PermissionTab user={user} onSaved={handlePermissionSaved} />
             )}
